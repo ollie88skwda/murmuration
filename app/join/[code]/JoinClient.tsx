@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { tierColor, hueForIndex } from '@/lib/colors'
+import ThemeToggle from '@/components/ThemeToggle'
 
 export default function JoinClient({ calendar }: { calendar: Calendar }) {
   const router = useRouter()
@@ -14,27 +15,20 @@ export default function JoinClient({ calendar }: { calendar: Calendar }) {
   const [error, setError] = useState('')
   const [checkingStorage, setCheckingStorage] = useState(true)
 
-  // Auto-resume if already joined this calendar
   useEffect(() => {
     const stored = localStorage.getItem(`flock_${calendar.code}`)
-    if (stored) {
-      router.replace(`/calendar/${calendar.code}`)
-    } else {
-      setCheckingStorage(false)
-    }
+    if (stored) { router.replace(`/calendar/${calendar.code}`) }
+    else { setCheckingStorage(false) }
   }, [calendar.code, router])
 
-  // Preview color as user types
   useEffect(() => {
     if (!name.trim()) { setPreviewHue(null); return }
     async function fetchNextHue() {
-      const { data } = await supabase
-        .from('participants')
-        .select('id')
-        .eq('calendar_id', calendar.id)
+      const { data } = await supabase.from('participants').select('id').eq('calendar_id', calendar.id)
       setPreviewHue(hueForIndex(data?.length ?? 0))
     }
-    fetchNextHue()
+    const t = setTimeout(fetchNextHue, 300)
+    return () => clearTimeout(t)
   }, [name, calendar.id])
 
   async function handleSubmit(e: React.FormEvent) {
@@ -42,40 +36,18 @@ export default function JoinClient({ calendar }: { calendar: Calendar }) {
     setError('')
     const trimmedName = name.trim()
     if (!trimmedName) return
-
     setLoading(true)
     try {
-      // Check if participant with this name already exists (case-insensitive)
-      const { data: existing } = await supabase
-        .from('participants')
-        .select('*')
-        .eq('calendar_id', calendar.id)
-        .ilike('name', trimmedName)
-        .single()
-
+      const { data: existing } = await supabase.from('participants').select('*').eq('calendar_id', calendar.id).ilike('name', trimmedName).single()
       if (existing) {
-        // Resume existing session
         localStorage.setItem(`flock_${calendar.code}`, JSON.stringify({ participantId: existing.id, calendarId: calendar.id }))
         router.push(`/calendar/${calendar.code}`)
         return
       }
-
-      // Create new participant
-      const { data: allParticipants } = await supabase
-        .from('participants')
-        .select('id')
-        .eq('calendar_id', calendar.id)
-
+      const { data: allParticipants } = await supabase.from('participants').select('id').eq('calendar_id', calendar.id)
       const hue = hueForIndex(allParticipants?.length ?? 0)
-
-      const { data: participant, error: err } = await supabase
-        .from('participants')
-        .insert({ calendar_id: calendar.id, name: trimmedName, color_hue: hue })
-        .select()
-        .single()
-
+      const { data: participant, error: err } = await supabase.from('participants').insert({ calendar_id: calendar.id, name: trimmedName, color_hue: hue }).select().single()
       if (err) throw err
-
       localStorage.setItem(`flock_${calendar.code}`, JSON.stringify({ participantId: participant.id, calendarId: calendar.id }))
       router.push(`/calendar/${calendar.code}`)
     } catch (err: unknown) {
@@ -88,54 +60,79 @@ export default function JoinClient({ calendar }: { calendar: Calendar }) {
   if (checkingStorage) return null
 
   return (
-    <main className="flex-1 flex flex-col items-center justify-center px-4 py-12">
-      <a href="/" className="flex items-center gap-2 mb-10 self-start sm:self-auto">
-        <span className="text-xl font-bold text-indigo-600" style={{ fontFamily: 'var(--font-jakarta)' }}>← flock</span>
-      </a>
+    <main className="flex-1 flex flex-col min-h-screen" style={{ background: 'var(--bg)' }}>
+      <nav className="flex items-center justify-between px-6 sm:px-10 py-5">
+        <a href="/" className="inline-flex items-center gap-2 text-sm font-medium" style={{ color: 'var(--ink-2)' }}>
+          <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M10 4L6 8l4 4"/></svg>
+          flock
+        </a>
+        <ThemeToggle />
+      </nav>
 
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-sm border border-indigo-100 p-8 flex flex-col items-center text-center">
-        <p className="text-sm text-[#5b5780] mb-1">You&apos;re joining</p>
-        <h1 className="text-2xl font-bold text-[#1a1635] mb-6" style={{ fontFamily: 'var(--font-jakarta)' }}>
-          {calendar.name}
-        </h1>
-
-        <form onSubmit={handleSubmit} className="w-full flex flex-col gap-4">
-          <div>
-            <label className="block text-sm font-medium text-[#1a1635] mb-2 text-left">
-              What&apos;s your name?
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="Your name"
-              autoFocus
-              required
-              className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-400 text-[#1a1635]"
-            />
-          </div>
-
-          {/* Color preview */}
-          {previewHue !== null && (
-            <div className="flex items-center gap-3 bg-indigo-50 rounded-xl px-4 py-3">
-              <div
-                className="w-8 h-8 rounded-full flex-shrink-0 ring-2 ring-white shadow-sm"
-                style={{ backgroundColor: tierColor(previewHue, 3) }}
-              />
-              <span className="text-sm text-[#5b5780]">Your color — you&apos;ll be assigned this unique color.</span>
+      <div className="flex-1 flex items-center justify-center px-6 py-8">
+        <div className="w-full max-w-sm">
+          <div className="rounded-3xl p-8" style={{ background: 'var(--bg-card)', boxShadow: 'var(--shadow-md)', border: '1px solid var(--border)' }}>
+            {/* Header */}
+            <div className="mb-7">
+              <p className="text-sm font-medium mb-1.5" style={{ color: 'var(--ink-2)' }}>You&apos;re joining</p>
+              <h1 className="text-2xl font-bold leading-tight" style={{ fontFamily: 'var(--font-jakarta)', color: 'var(--ink)' }}>
+                {calendar.name}
+              </h1>
             </div>
-          )}
 
-          {error && <p className="text-red-500 text-sm text-left">{error}</p>}
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              <div>
+                <label className="block text-sm font-semibold mb-2" style={{ color: 'var(--ink)' }}>
+                  What&apos;s your name?
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  placeholder="Your name"
+                  autoFocus
+                  required
+                  className="w-full rounded-xl px-4 py-3 text-base focus:outline-none transition-colors"
+                  style={{ border: '1.5px solid var(--border)', background: 'var(--bg)', color: 'var(--ink)' }}
+                  onFocus={e => (e.target.style.borderColor = 'var(--primary)')}
+                  onBlur={e => (e.target.style.borderColor = 'var(--border)')}
+                />
+              </div>
 
-          <button
-            type="submit"
-            disabled={loading || !name.trim()}
-            className="w-full bg-indigo-500 hover:bg-indigo-600 disabled:bg-indigo-200 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition-colors"
-          >
-            {loading ? 'Joining…' : "Let's go →"}
-          </button>
-        </form>
+              {/* Color preview */}
+              {previewHue !== null && (
+                <div
+                  className="flex items-center gap-3 rounded-xl px-4 py-3"
+                  style={{ background: 'var(--primary-light)', border: '1px solid var(--border)' }}
+                >
+                  <div
+                    className="w-9 h-9 rounded-full flex-shrink-0 ring-2 ring-white shadow-sm"
+                    style={{ background: tierColor(previewHue, 3) }}
+                  />
+                  <div>
+                    <p className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>Your color</p>
+                    <p className="text-xs" style={{ color: 'var(--ink-2)' }}>Unique to you on this calendar</p>
+                  </div>
+                </div>
+              )}
+
+              {error && (
+                <div className="rounded-xl px-4 py-3 text-sm" style={{ background: '#FFF0F0', color: '#C0392B' }}>
+                  {error}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading || !name.trim()}
+                className="w-full py-3.5 rounded-xl font-semibold text-base text-white transition-all mt-1"
+                style={{ background: loading || !name.trim() ? 'var(--ink-3)' : 'var(--primary)' }}
+              >
+                {loading ? 'Joining…' : "Let's go →"}
+              </button>
+            </form>
+          </div>
+        </div>
       </div>
     </main>
   )

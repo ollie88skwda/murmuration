@@ -3,13 +3,12 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import ThemeToggle from '@/components/ThemeToggle'
 
 function generateCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
   let code = ''
-  for (let i = 0; i < 6; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)]
-  }
+  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)]
   return code
 }
 
@@ -28,33 +27,18 @@ export default function CreatePage() {
     setError('')
     if (!name || !startDate || !endDate) return
     if (endDate < startDate) { setError('End date must be after start date.'); return }
-
     setLoading(true)
     try {
       let code = generateCode()
-      // Ensure uniqueness (retry once on collision)
       const { data: existing } = await supabase.from('calendars').select('code').eq('code', code).single()
       if (existing) code = generateCode()
-
       const expiresAt = new Date(endDate)
       expiresAt.setDate(expiresAt.getDate() + 30)
-
       const { data: cal, error: calErr } = await supabase
         .from('calendars')
-        .insert({
-          code,
-          name,
-          start_date: startDate,
-          end_date: endDate,
-          day_start_time: startTime,
-          day_end_time: endTime,
-          expires_at: expiresAt.toISOString(),
-        })
-        .select()
-        .single()
-
+        .insert({ code, name, start_date: startDate, end_date: endDate, day_start_time: startTime, day_end_time: endTime, expires_at: expiresAt.toISOString() })
+        .select().single()
       if (calErr) throw calErr
-
       router.push(`/share/${cal.code}`)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
@@ -64,101 +48,120 @@ export default function CreatePage() {
   }
 
   const today = new Date().toISOString().slice(0, 10)
+  const timeOptions = Array.from({ length: 48 }, (_, i) => {
+    const h = Math.floor(i / 2), m = i % 2 === 0 ? '00' : '30'
+    const val = `${String(h).padStart(2, '0')}:${m}`
+    const label = `${h % 12 === 0 ? 12 : h % 12}:${m} ${h < 12 ? 'AM' : 'PM'}`
+    return { val, label }
+  })
 
   return (
-    <main className="flex-1 flex flex-col items-center justify-center px-4 py-12">
-      <a href="/" className="flex items-center gap-2 mb-10 self-start sm:self-auto">
-        <span className="text-xl font-bold text-indigo-600" style={{ fontFamily: 'var(--font-jakarta)' }}>← flock</span>
-      </a>
+    <main className="flex-1 flex flex-col min-h-screen" style={{ background: 'var(--bg)' }}>
+      <nav className="flex items-center justify-between px-6 sm:px-10 py-5">
+        <a href="/" className="inline-flex items-center gap-2 text-sm font-medium" style={{ color: 'var(--ink-2)' }}>
+          <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M10 4L6 8l4 4"/></svg>
+          Back to flock
+        </a>
+        <ThemeToggle />
+      </nav>
 
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-sm border border-indigo-100 p-8">
-        <h1 className="text-2xl font-bold text-[#1a1635] mb-6" style={{ fontFamily: 'var(--font-jakarta)' }}>
-          New Calendar
-        </h1>
-
-        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-          <div>
-            <label className="block text-sm font-medium text-[#1a1635] mb-1">Calendar name</label>
-            <input
-              type="text"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="Summer Trip Planning"
-              required
-              className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-400 text-[#1a1635]"
-            />
+      <div className="flex-1 flex items-center justify-center px-6 py-8">
+        <div className="w-full max-w-lg">
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold mb-1" style={{ fontFamily: 'var(--font-jakarta)', color: 'var(--ink)' }}>
+              New calendar
+            </h1>
+            <p style={{ color: 'var(--ink-2)' }}>Set a date range, then share the code.</p>
           </div>
 
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-[#1a1635] mb-1">Start date</label>
-              <input
-                type="date"
-                value={startDate}
-                min={today}
-                onChange={e => setStartDate(e.target.value)}
-                required
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-400 text-[#1a1635]"
-              />
-            </div>
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-[#1a1635] mb-1">End date</label>
-              <input
-                type="date"
-                value={endDate}
-                min={startDate || today}
-                onChange={e => setEndDate(e.target.value)}
-                required
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-400 text-[#1a1635]"
-              />
-            </div>
-          </div>
+          <div className="rounded-2xl p-8" style={{ background: 'var(--bg-card)', boxShadow: 'var(--shadow-md)', border: '1px solid var(--border)' }}>
+            <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+              <div>
+                <label className="block text-sm font-semibold mb-2" style={{ color: 'var(--ink)' }}>Calendar name</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  placeholder="Summer Trip Planning"
+                  required
+                  autoFocus
+                  className="w-full rounded-xl px-4 py-3 text-base focus:outline-none transition-colors"
+                  style={{ border: '1.5px solid var(--border)', background: 'var(--bg)', color: 'var(--ink)' }}
+                  onFocus={e => (e.target.style.borderColor = 'var(--primary)')}
+                  onBlur={e => (e.target.style.borderColor = 'var(--border)')}
+                />
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-[#1a1635] mb-1">
-              Daily hours <span className="text-gray-400 font-normal">(optional)</span>
-            </label>
-            <div className="flex items-center gap-2">
-              <select
-                value={startTime}
-                onChange={e => setStartTime(e.target.value)}
-                className="flex-1 border border-gray-200 rounded-xl px-3 py-3 focus:outline-none focus:border-indigo-400 text-[#1a1635]"
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold mb-2" style={{ color: 'var(--ink)' }}>Start date</label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    min={today}
+                    onChange={e => setStartDate(e.target.value)}
+                    required
+                    className="w-full rounded-xl px-4 py-3 text-base focus:outline-none transition-colors"
+                    style={{ border: '1.5px solid var(--border)', background: 'var(--bg)', color: 'var(--ink)' }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold mb-2" style={{ color: 'var(--ink)' }}>End date</label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    min={startDate || today}
+                    onChange={e => setEndDate(e.target.value)}
+                    required
+                    className="w-full rounded-xl px-4 py-3 text-base focus:outline-none transition-colors"
+                    style={{ border: '1.5px solid var(--border)', background: 'var(--bg)', color: 'var(--ink)' }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold mb-2" style={{ color: 'var(--ink)' }}>
+                  Daily hours{' '}
+                  <span className="font-normal" style={{ color: 'var(--ink-3)' }}>optional</span>
+                </label>
+                <div className="flex items-center gap-3">
+                  <select
+                    value={startTime}
+                    onChange={e => setStartTime(e.target.value)}
+                    className="flex-1 rounded-xl px-3 py-3 text-sm focus:outline-none"
+                    style={{ border: '1.5px solid var(--border)', background: 'var(--bg)', color: 'var(--ink)' }}
+                  >
+                    {timeOptions.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
+                  </select>
+                  <span className="text-sm font-medium" style={{ color: 'var(--ink-3)' }}>to</span>
+                  <select
+                    value={endTime}
+                    onChange={e => setEndTime(e.target.value)}
+                    className="flex-1 rounded-xl px-3 py-3 text-sm focus:outline-none"
+                    style={{ border: '1.5px solid var(--border)', background: 'var(--bg)', color: 'var(--ink)' }}
+                  >
+                    {timeOptions.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {error && (
+                <div className="rounded-xl px-4 py-3 text-sm" style={{ background: '#FFF0F0', color: '#C0392B', border: '1px solid #FECACA' }}>
+                  {error}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3.5 rounded-xl font-semibold text-base text-white transition-all mt-1"
+                style={{ background: loading ? 'var(--ink-3)' : 'var(--primary)' }}
               >
-                {Array.from({ length: 48 }, (_, i) => {
-                  const h = Math.floor(i / 2)
-                  const m = i % 2 === 0 ? '00' : '30'
-                  const val = `${String(h).padStart(2, '0')}:${m}`
-                  const label = `${h % 12 === 0 ? 12 : h % 12}:${m} ${h < 12 ? 'AM' : 'PM'}`
-                  return <option key={val} value={val}>{label}</option>
-                })}
-              </select>
-              <span className="text-gray-400">to</span>
-              <select
-                value={endTime}
-                onChange={e => setEndTime(e.target.value)}
-                className="flex-1 border border-gray-200 rounded-xl px-3 py-3 focus:outline-none focus:border-indigo-400 text-[#1a1635]"
-              >
-                {Array.from({ length: 48 }, (_, i) => {
-                  const h = Math.floor(i / 2)
-                  const m = i % 2 === 0 ? '00' : '30'
-                  const val = `${String(h).padStart(2, '0')}:${m}`
-                  const label = `${h % 12 === 0 ? 12 : h % 12}:${m} ${h < 12 ? 'AM' : 'PM'}`
-                  return <option key={val} value={val}>{label}</option>
-                })}
-              </select>
-            </div>
+                {loading ? 'Creating…' : 'Create Calendar →'}
+              </button>
+            </form>
           </div>
-
-          {error && <p className="text-red-500 text-sm">{error}</p>}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-indigo-500 hover:bg-indigo-600 disabled:bg-indigo-300 text-white font-semibold py-3 rounded-xl transition-colors mt-2"
-          >
-            {loading ? 'Creating…' : 'Create Calendar →'}
-          </button>
-        </form>
+        </div>
       </div>
     </main>
   )

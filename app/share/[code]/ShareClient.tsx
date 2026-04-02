@@ -1,18 +1,21 @@
 'use client'
 
 import { Calendar } from '@/lib/types'
-import { useEffect, useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { hueForIndex } from '@/lib/colors'
+import ThemeToggle from '@/components/ThemeToggle'
 
 export default function ShareClient({ calendar }: { calendar: Calendar }) {
   const router = useRouter()
   const [copiedCode, setCopiedCode] = useState(false)
   const [copiedUrl, setCopiedUrl] = useState(false)
-  const shareUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/join/${calendar.code}`
-    : `https://flock.app/join/${calendar.code}`
+  const [shareUrl, setShareUrl] = useState(`https://flock-two.vercel.app/join/${calendar.code}`)
+
+  useEffect(() => {
+    setShareUrl(`${window.location.origin}/join/${calendar.code}`)
+  }, [calendar.code])
 
   function copy(text: string, which: 'code' | 'url') {
     navigator.clipboard.writeText(text)
@@ -20,110 +23,107 @@ export default function ShareClient({ calendar }: { calendar: Calendar }) {
     else { setCopiedUrl(true); setTimeout(() => setCopiedUrl(false), 2000) }
   }
 
-  // On share page, register host as participant if not already done
   useEffect(() => {
     const stored = localStorage.getItem(`flock_${calendar.code}`)
-    if (stored) return // already joined as host
-
+    if (stored) return
     async function registerHost() {
-      const hostName = 'Host'
-      // Check if host participant exists
-      const { data: existing } = await supabase
-        .from('participants')
-        .select('*')
-        .eq('calendar_id', calendar.id)
-        .ilike('name', hostName)
-        .single()
-
+      const { data: existing } = await supabase.from('participants').select('*').eq('calendar_id', calendar.id).ilike('name', 'Host').single()
       if (existing) {
         localStorage.setItem(`flock_${calendar.code}`, JSON.stringify({ participantId: existing.id, calendarId: calendar.id }))
-        // Update host_participant_id if needed
-        if (!calendar.host_participant_id) {
-          await supabase.from('calendars').update({ host_participant_id: existing.id }).eq('id', calendar.id)
-        }
+        if (!calendar.host_participant_id) await supabase.from('calendars').update({ host_participant_id: existing.id }).eq('id', calendar.id)
         return
       }
-
-      const { data: countData } = await supabase
-        .from('participants')
-        .select('id', { count: 'exact' })
-        .eq('calendar_id', calendar.id)
-
-      const index = (countData?.length ?? 0)
-      const hue = hueForIndex(index)
-
-      const { data: participant } = await supabase
-        .from('participants')
-        .insert({ calendar_id: calendar.id, name: hostName, color_hue: hue })
-        .select()
-        .single()
-
+      const { data: countData } = await supabase.from('participants').select('id', { count: 'exact' }).eq('calendar_id', calendar.id)
+      const hue = hueForIndex(countData?.length ?? 0)
+      const { data: participant } = await supabase.from('participants').insert({ calendar_id: calendar.id, name: 'Host', color_hue: hue }).select().single()
       if (participant) {
         await supabase.from('calendars').update({ host_participant_id: participant.id }).eq('id', calendar.id)
         localStorage.setItem(`flock_${calendar.code}`, JSON.stringify({ participantId: participant.id, calendarId: calendar.id }))
       }
     }
-
     registerHost()
   }, [calendar])
 
   return (
-    <main className="flex-1 flex flex-col items-center justify-center px-4 py-12">
-      <a href="/" className="flex items-center gap-2 mb-10 self-start sm:self-auto">
-        <span className="text-xl font-bold text-indigo-600" style={{ fontFamily: 'var(--font-jakarta)' }}>← flock</span>
-      </a>
+    <main className="flex-1 flex flex-col min-h-screen" style={{ background: 'var(--bg)' }}>
+      <nav className="flex items-center justify-between px-6 sm:px-10 py-5">
+        <a href="/" className="inline-flex items-center gap-2 text-sm font-medium" style={{ color: 'var(--ink-2)' }}>
+          <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M10 4L6 8l4 4"/></svg>
+          flock
+        </a>
+        <ThemeToggle />
+      </nav>
 
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-sm border border-indigo-100 p-8 flex flex-col items-center text-center">
-        {/* Check icon */}
-        <div className="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center mb-4">
-          <svg width="32" height="32" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M7 16l5 5 11-11"/>
-          </svg>
+      <div className="flex-1 flex items-center justify-center px-6 py-8">
+        <div className="w-full max-w-md">
+          {/* Success card */}
+          <div className="rounded-3xl p-8 text-center" style={{ background: 'var(--bg-card)', boxShadow: 'var(--shadow-md)', border: '1px solid var(--border)' }}>
+            {/* Icon */}
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-5" style={{ background: 'var(--primary-light)' }}>
+              <svg width="28" height="28" fill="none" stroke="var(--primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                <path d="M5 13l4 4L19 7"/>
+              </svg>
+            </div>
+
+            <p className="text-sm font-medium mb-1" style={{ color: 'var(--ink-2)' }}>Calendar created</p>
+            <h1 className="text-2xl font-bold mb-7" style={{ fontFamily: 'var(--font-jakarta)', color: 'var(--ink)' }}>
+              {calendar.name}
+            </h1>
+
+            {/* Code block */}
+            <div
+              className="rounded-2xl p-5 mb-4 flex items-center justify-between"
+              style={{ background: 'var(--primary-light)', border: '1px solid var(--border)' }}
+            >
+              <div className="text-left">
+                <p className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--primary)' }}>Share code</p>
+                <p className="text-4xl font-mono font-black tracking-[0.15em]" style={{ color: 'var(--primary)' }}>
+                  {calendar.code}
+                </p>
+              </div>
+              <button
+                onClick={() => copy(calendar.code, 'code')}
+                className="w-10 h-10 rounded-xl flex items-center justify-center transition-all"
+                style={{ background: copiedCode ? 'var(--primary)' : 'white', color: copiedCode ? 'white' : 'var(--ink-2)' }}
+              >
+                {copiedCode
+                  ? <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M4 12l5 5L20 6"/></svg>
+                  : <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                }
+              </button>
+            </div>
+
+            {/* URL row */}
+            <div
+              className="rounded-xl px-4 py-3 mb-6 flex items-center justify-between"
+              style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}
+            >
+              <span className="text-xs font-mono truncate" style={{ color: 'var(--ink-2)' }}>{shareUrl}</span>
+              <button
+                onClick={() => copy(shareUrl, 'url')}
+                className="ml-2 flex-shrink-0 transition-colors"
+                style={{ color: copiedUrl ? 'var(--primary)' : 'var(--ink-3)' }}
+              >
+                {copiedUrl
+                  ? <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M4 9l4 4L16 5"/></svg>
+                  : <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                }
+              </button>
+            </div>
+
+            <button
+              onClick={() => router.push(`/calendar/${calendar.code}`)}
+              className="w-full py-3.5 rounded-xl font-semibold text-white transition-all"
+              style={{ background: 'var(--primary)' }}
+            >
+              Open my calendar →
+            </button>
+          </div>
+
+          <p className="text-center text-sm mt-4" style={{ color: 'var(--ink-3)' }}>
+            Share the code or link with your group.
+          </p>
         </div>
-
-        <p className="text-sm font-medium text-[#5b5780] mb-1">Calendar created</p>
-        <h1 className="text-2xl font-bold text-[#1a1635] mb-6" style={{ fontFamily: 'var(--font-jakarta)' }}>
-          {calendar.name}
-        </h1>
-
-        {/* Code */}
-        <p className="text-xs font-medium text-[#5b5780] uppercase tracking-wider mb-2">Share code</p>
-        <div className="w-full flex items-center justify-between bg-indigo-50 rounded-xl px-5 py-4 mb-3">
-          <span className="text-3xl font-mono font-bold tracking-[0.2em] text-indigo-600">{calendar.code}</span>
-          <button
-            onClick={() => copy(calendar.code, 'code')}
-            className="text-indigo-400 hover:text-indigo-600 transition-colors ml-3"
-          >
-            {copiedCode ? (
-              <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 12l5 5L20 7"/></svg>
-            ) : (
-              <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-            )}
-          </button>
-        </div>
-
-        {/* URL */}
-        <p className="text-xs font-medium text-[#5b5780] uppercase tracking-wider mb-2">Or share link</p>
-        <div className="w-full flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3 mb-6">
-          <span className="text-sm text-gray-500 font-mono truncate">{shareUrl}</span>
-          <button
-            onClick={() => copy(shareUrl, 'url')}
-            className="text-gray-400 hover:text-indigo-600 transition-colors ml-2 flex-shrink-0"
-          >
-            {copiedUrl ? (
-              <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 12l5 5L20 7"/></svg>
-            ) : (
-              <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-            )}
-          </button>
-        </div>
-
-        <button
-          onClick={() => router.push(`/calendar/${calendar.code}`)}
-          className="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-3 rounded-xl transition-colors"
-        >
-          Open My Calendar →
-        </button>
       </div>
     </main>
   )
