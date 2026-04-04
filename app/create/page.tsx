@@ -4,6 +4,11 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import ThemeToggle from '@/components/ThemeToggle'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Card, CardContent } from '@/components/ui/card'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 function generateCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -12,6 +17,11 @@ function generateCode(): string {
   return code
 }
 
+const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6]
+const WEEKDAYS = [1, 2, 3, 4, 5]
+const WEEKENDS = [0, 6]
+
 export default function CreatePage() {
   const router = useRouter()
   const [name, setName] = useState('')
@@ -19,8 +29,23 @@ export default function CreatePage() {
   const [endDate, setEndDate] = useState('')
   const [startTime, setStartTime] = useState('08:00')
   const [endTime, setEndTime] = useState('23:00')
+  const [selectedDays, setSelectedDays] = useState<number[]>(ALL_DAYS)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  function toggleDay(day: number) {
+    setSelectedDays(prev => {
+      if (prev.includes(day)) {
+        const next = prev.filter(d => d !== day)
+        return next.length === 0 ? prev : next // keep at least 1
+      }
+      return [...prev, day].sort()
+    })
+  }
+
+  function setPreset(days: number[]) {
+    setSelectedDays(days)
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -34,9 +59,16 @@ export default function CreatePage() {
       if (existing) code = generateCode()
       const expiresAt = new Date(endDate)
       expiresAt.setDate(expiresAt.getDate() + 30)
+      const daysToStore = selectedDays.length === 7 ? null : selectedDays
       const { data: cal, error: calErr } = await supabase
         .from('calendars')
-        .insert({ code, name, start_date: startDate, end_date: endDate, day_start_time: startTime, day_end_time: endTime, expires_at: expiresAt.toISOString() })
+        .insert({
+          code, name,
+          start_date: startDate, end_date: endDate,
+          day_start_time: startTime, day_end_time: endTime,
+          expires_at: expiresAt.toISOString(),
+          selected_days_of_week: daysToStore,
+        })
         .select().single()
       if (calErr) throw calErr
       router.push(`/share/${cal.code}`)
@@ -55,11 +87,17 @@ export default function CreatePage() {
     return { val, label }
   })
 
+  const isAllDays = selectedDays.length === 7
+  const isWeekdays = selectedDays.length === 5 && WEEKDAYS.every(d => selectedDays.includes(d))
+  const isWeekends = selectedDays.length === 2 && WEEKENDS.every(d => selectedDays.includes(d))
+
   return (
     <main className="flex-1 flex flex-col min-h-screen" style={{ background: 'var(--bg)' }}>
       <nav className="flex items-center justify-between px-6 sm:px-10 py-5">
         <a href="/" className="inline-flex items-center gap-2 text-sm font-medium" style={{ color: 'var(--ink-2)' }}>
-          <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M10 4L6 8l4 4"/></svg>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M10 4L6 8l4 4"/>
+          </svg>
           Back to flock
         </a>
         <ThemeToggle />
@@ -74,93 +112,150 @@ export default function CreatePage() {
             <p style={{ color: 'var(--ink-2)' }}>Set a date range, then share the code.</p>
           </div>
 
-          <div className="rounded-2xl p-8" style={{ background: 'var(--bg-card)', boxShadow: 'var(--shadow-md)', border: '1px solid var(--border)' }}>
-            <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-              <div>
-                <label className="block text-sm font-semibold mb-2" style={{ color: 'var(--ink)' }}>Calendar name</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  placeholder="Summer Trip Planning"
-                  required
-                  autoFocus
-                  className="w-full rounded-xl px-4 py-3 text-base focus:outline-none transition-colors"
-                  style={{ border: '1.5px solid var(--border)', background: 'var(--bg)', color: 'var(--ink)' }}
-                  onFocus={e => (e.target.style.borderColor = 'var(--primary)')}
-                  onBlur={e => (e.target.style.borderColor = 'var(--border)')}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold mb-2" style={{ color: 'var(--ink)' }}>Start date</label>
-                  <input
-                    type="date"
-                    value={startDate}
-                    min={today}
-                    onChange={e => setStartDate(e.target.value)}
+          <Card style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-md)' }}>
+            <CardContent className="pt-6">
+              <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+                <div className="space-y-2">
+                  <Label htmlFor="cal-name" style={{ color: 'var(--ink)' }}>Calendar name</Label>
+                  <Input
+                    id="cal-name"
+                    type="text"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    placeholder="Summer Trip Planning"
                     required
-                    className="w-full rounded-xl px-4 py-3 text-base focus:outline-none transition-colors"
-                    style={{ border: '1.5px solid var(--border)', background: 'var(--bg)', color: 'var(--ink)' }}
+                    autoFocus
+                    style={{ background: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--ink)' }}
+                    className="focus-visible:ring-2"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-semibold mb-2" style={{ color: 'var(--ink)' }}>End date</label>
-                  <input
-                    type="date"
-                    value={endDate}
-                    min={startDate || today}
-                    onChange={e => setEndDate(e.target.value)}
-                    required
-                    className="w-full rounded-xl px-4 py-3 text-base focus:outline-none transition-colors"
-                    style={{ border: '1.5px solid var(--border)', background: 'var(--bg)', color: 'var(--ink)' }}
-                  />
-                </div>
-              </div>
 
-              <div>
-                <label className="block text-sm font-semibold mb-2" style={{ color: 'var(--ink)' }}>
-                  Daily hours{' '}
-                  <span className="font-normal" style={{ color: 'var(--ink-3)' }}>optional</span>
-                </label>
-                <div className="flex items-center gap-3">
-                  <select
-                    value={startTime}
-                    onChange={e => setStartTime(e.target.value)}
-                    className="flex-1 rounded-xl px-3 py-3 text-sm focus:outline-none"
-                    style={{ border: '1.5px solid var(--border)', background: 'var(--bg)', color: 'var(--ink)' }}
-                  >
-                    {timeOptions.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
-                  </select>
-                  <span className="text-sm font-medium" style={{ color: 'var(--ink-3)' }}>to</span>
-                  <select
-                    value={endTime}
-                    onChange={e => setEndTime(e.target.value)}
-                    className="flex-1 rounded-xl px-3 py-3 text-sm focus:outline-none"
-                    style={{ border: '1.5px solid var(--border)', background: 'var(--bg)', color: 'var(--ink)' }}
-                  >
-                    {timeOptions.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
-                  </select>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="start-date" style={{ color: 'var(--ink)' }}>Start date</Label>
+                    <Input
+                      id="start-date"
+                      type="date"
+                      value={startDate}
+                      min={today}
+                      onChange={e => setStartDate(e.target.value)}
+                      required
+                      style={{ background: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--ink)' }}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="end-date" style={{ color: 'var(--ink)' }}>End date</Label>
+                    <Input
+                      id="end-date"
+                      type="date"
+                      value={endDate}
+                      min={startDate || today}
+                      onChange={e => setEndDate(e.target.value)}
+                      required
+                      style={{ background: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--ink)' }}
+                    />
+                  </div>
                 </div>
-              </div>
 
-              {error && (
-                <div className="rounded-xl px-4 py-3 text-sm" style={{ background: '#FFF0F0', color: '#C0392B', border: '1px solid #FECACA' }}>
-                  {error}
+                {/* Day selection */}
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <Label style={{ color: 'var(--ink)' }}>
+                      Which days{' '}
+                      <span className="font-normal text-xs" style={{ color: 'var(--ink-3)' }}>optional</span>
+                    </Label>
+                    <div className="flex items-center gap-1">
+                      {[
+                        { label: 'All', active: isAllDays, days: ALL_DAYS },
+                        { label: 'Weekdays', active: isWeekdays, days: WEEKDAYS },
+                        { label: 'Weekends', active: isWeekends, days: WEEKENDS },
+                      ].map(preset => (
+                        <button
+                          key={preset.label}
+                          type="button"
+                          onClick={() => setPreset(preset.days)}
+                          className="text-xs px-2 py-1 rounded-lg font-medium transition-all"
+                          style={{
+                            background: preset.active ? 'var(--primary)' : 'var(--bg)',
+                            color: preset.active ? 'white' : 'var(--ink-3)',
+                            border: `1px solid ${preset.active ? 'var(--primary)' : 'var(--border)'}`,
+                          }}
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex gap-1.5">
+                    {DAY_LABELS.map((label, i) => {
+                      const active = selectedDays.includes(i)
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => toggleDay(i)}
+                          className="flex-1 py-2 rounded-xl text-xs font-bold transition-all"
+                          style={{
+                            background: active ? 'var(--primary)' : 'var(--bg)',
+                            color: active ? 'white' : 'var(--ink-3)',
+                            border: `1.5px solid ${active ? 'var(--primary)' : 'var(--border)'}`,
+                          }}
+                        >
+                          {label}
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
-              )}
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3.5 rounded-xl font-semibold text-base text-white transition-all mt-1"
-                style={{ background: loading ? 'var(--ink-3)' : 'var(--primary)' }}
-              >
-                {loading ? 'Creating…' : 'Create Calendar →'}
-              </button>
-            </form>
-          </div>
+                <div className="space-y-2">
+                  <Label style={{ color: 'var(--ink)' }}>
+                    Daily hours{' '}
+                    <span className="font-normal text-xs" style={{ color: 'var(--ink-3)' }}>optional</span>
+                  </Label>
+                  <div className="flex items-center gap-3">
+                    <Select value={startTime} onValueChange={v => v && setStartTime(v)}>
+                      <SelectTrigger className="flex-1" style={{ background: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--ink)' }}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent style={{ background: 'var(--bg-card)', borderColor: 'var(--border)', color: 'var(--ink)' }}>
+                        {timeOptions.map(o => <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <span className="text-sm font-medium flex-shrink-0" style={{ color: 'var(--ink-3)' }}>to</span>
+                    <Select value={endTime} onValueChange={v => v && setEndTime(v)}>
+                      <SelectTrigger className="flex-1" style={{ background: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--ink)' }}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent style={{ background: 'var(--bg-card)', borderColor: 'var(--border)', color: 'var(--ink)' }}>
+                        {timeOptions.map(o => <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {error && (
+                  <div className="rounded-xl px-4 py-3 text-sm" style={{ background: 'rgba(239,68,68,0.08)', color: 'var(--destructive)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                    {error}
+                  </div>
+                )}
+
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-6 rounded-xl font-semibold text-base mt-1 gap-2"
+                  style={{ background: loading ? 'var(--ink-3)' : 'var(--primary)', color: 'var(--primary-foreground)' }}
+                >
+                  {loading ? 'Creating…' : 'Create Calendar'}
+                  {!loading && (
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 8h10M9 4l4 4-4 4"/>
+                    </svg>
+                  )}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </main>

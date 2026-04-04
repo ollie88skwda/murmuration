@@ -8,6 +8,7 @@ export interface Calendar {
   day_start_time: string
   day_end_time: string
   is_locked: boolean
+  selected_days_of_week: number[] | null
   created_at: string
   expires_at: string
 }
@@ -29,8 +30,17 @@ export interface Block {
   start_time: string
   end_time: string
   tier: 1 | 2 | 3
+  label?: string | null
   created_at: string
   updated_at: string
+}
+
+export interface Message {
+  id: string
+  calendar_id: string
+  participant_id: string
+  content: string
+  created_at: string
 }
 
 export const TIER_LABELS: Record<number, string> = {

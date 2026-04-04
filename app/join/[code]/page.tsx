@@ -1,9 +1,13 @@
 import { supabase } from '@/lib/supabase'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import JoinClient from './JoinClient'
 
 export default async function JoinPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = await params
+
+  if (code.toUpperCase() === 'DEBUG') {
+    redirect('/debug')
+  }
 
   const { data: calendar } = await supabase
     .from('calendars')

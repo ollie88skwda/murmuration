@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.env*.local
+
+# test artifacts
+test-results/
+flock_test*.js
+playwright-realtime-test.mjs
+screenshot.mjs

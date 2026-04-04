@@ -2,8 +2,9 @@ import { supabase } from '@/lib/supabase'
 import { notFound } from 'next/navigation'
 import CalendarClient from './CalendarClient'
 
-export default async function CalendarPage({ params }: { params: Promise<{ code: string }> }) {
+export default async function CalendarPage({ params, searchParams }: { params: Promise<{ code: string }>; searchParams: Promise<Record<string, string | string[]>> }) {
   const { code } = await params
+  const resolvedSearchParams = await searchParams
 
   const { data: calendar } = await supabase
     .from('calendars')
@@ -31,6 +32,7 @@ export default async function CalendarPage({ params }: { params: Promise<{ code:
       calendar={calendar}
       initialParticipants={participants ?? []}
       initialBlocks={blocks ?? []}
+      gcalSuccess={resolvedSearchParams['gcal'] === 'success'}
     />
   )
 }
