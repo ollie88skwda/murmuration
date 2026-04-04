@@ -165,24 +165,18 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
   }, [gcalSuccess])
 
   useEffect(() => {
-    // Remove stale channels left over from React Strict Mode double-invocation
-    // or rapid remounts. supabase.channel() returns an existing subscribed channel
-    // when the name matches, and calling .on() on an already-subscribed channel throws.
-    for (const name of [`blocks:${cal.id}`, `participants:${cal.id}`, `calendar:${cal.id}`]) {
-      const stale = supabase.getChannels().find(c => c.topic === `realtime:${name}`)
-      if (stale) supabase.removeChannel(stale)
-    }
+    // Use a unique suffix per mount so supabase.channel() always creates a fresh
+    // RealtimeChannel in 'closed' state. Without this, React Strict Mode's double-invoke
+    // causes channel() to return the still-subscribed channel from the first mount, and
+    // .subscribe() on an already-joined channel is a silent no-op — killing realtime.
+    const s = Math.random().toString(36).slice(2, 7)
 
-    const blocksSub = supabase.channel(`blocks:${cal.id}`)
+    const blocksSub = supabase.channel(`blocks:${cal.id}:${s}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'blocks', filter: `calendar_id=eq.${cal.id}` }, (payload) => {
         if (payload.eventType === 'INSERT') {
           const incoming = payload.new as Block
           setBlocks(prev => {
-            // Already have the real ID (e.g. from optimistic update that already resolved)
             if (prev.some(b => b.id === incoming.id)) return prev
-            // Remove any temp block that matches this confirmed block's identity
-            // (race: Realtime fires before the local insert().select() promise resolves
-            //  the temp→real replacement, so temp ID still in state)
             const withoutTemp = prev.filter(b =>
               !(b.id.startsWith('temp_') &&
                 b.participant_id === incoming.participant_id &&
@@ -197,9 +191,11 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
         } else if (payload.eventType === 'DELETE') {
           setBlocks(prev => prev.filter(b => b.id !== payload.old.id))
         }
-      }).subscribe()
+      }).subscribe((status, err) => {
+        if (err) console.error('[realtime] blocks error', err)
+      })
 
-    const pSub = supabase.channel(`participants:${cal.id}`)
+    const pSub = supabase.channel(`participants:${cal.id}:${s}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'participants', filter: `calendar_id=eq.${cal.id}` }, (payload) => {
         if (payload.eventType === 'INSERT') {
           const incoming = payload.new as Participant
@@ -209,13 +205,16 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
         } else if (payload.eventType === 'DELETE') {
           setParticipants(prev => prev.filter(p => p.id !== payload.old.id))
         }
-      }).subscribe()
+      }).subscribe((status, err) => {
+        if (err) console.error('[realtime] participants error', err)
+      })
 
-    // Feature 2: Subscribe to calendars table so lock/unlock updates without reload
-    const calSub = supabase.channel(`calendar:${cal.id}`)
+    const calSub = supabase.channel(`calendar:${cal.id}:${s}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'calendars', filter: `id=eq.${cal.id}` }, (payload) => {
         setCal(payload.new as Calendar)
-      }).subscribe()
+      }).subscribe((status, err) => {
+        if (err) console.error('[realtime] calendar error', err)
+      })
 
     return () => {
       supabase.removeChannel(blocksSub)

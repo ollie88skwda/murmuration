@@ -56,16 +56,9 @@ export default function ChatPanel({ calendarId, participantId, participants, onC
 
   // Realtime subscription
   useEffect(() => {
-    // Remove any stale channel with the same name left over from a previous
-    // render cycle (e.g. React Strict Mode double-invoke or rapid remounts).
-    // supabase.channel() returns an *existing* subscribed channel when the name
-    // matches, and calling .on() on an already-subscribed channel throws.
-    const channelName = `messages:${calendarId}`
-    const stale = supabase.getChannels().find(c => c.topic === `realtime:${channelName}`)
-    if (stale) supabase.removeChannel(stale)
-
+    const s = Math.random().toString(36).slice(2, 7)
     const channel = supabase
-      .channel(channelName)
+      .channel(`messages:${calendarId}:${s}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `calendar_id=eq.${calendarId}` },
@@ -76,7 +69,9 @@ export default function ChatPanel({ calendarId, participantId, participants, onC
           )
         }
       )
-      .subscribe()
+      .subscribe((status, err) => {
+        if (err) console.error('[realtime] messages error', err)
+      })
     return () => { supabase.removeChannel(channel) }
   }, [calendarId])
 
