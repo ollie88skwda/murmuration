@@ -7,7 +7,6 @@ import { Calendar, Participant, Block, TIER_LABELS } from '@/lib/types'
 import { saveToHistory } from '@/lib/history'
 import { tierColor, hueForIndex } from '@/lib/colors'
 import { getTimeSlots, getDateRange, formatTime, formatDate, addThirtyMin, timeToSlotIndex, getTimeBands } from '@/lib/grid'
-import ThemeToggle from '@/components/ThemeToggle'
 import ChatPanel from '@/components/ChatPanel'
 
 const GCAL_TOKEN_KEY = 'synkra_gcal_token'
@@ -1034,10 +1033,8 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
               style={{ background: 'var(--primary)' }}
             >
               <svg width="13" height="13" viewBox="0 0 18 18" fill="none">
-                <path d="M9 2C5.5 2 3 4.5 3 7.5c0 2 1 3.8 2.5 4.8L9 14.5l3.5-2.2C14 11.3 15 9.5 15 7.5 15 4.5 12.5 2 9 2z" fill="white" opacity="0.3"/>
-                <circle cx="6.5" cy="8" r="1.5" fill="white"/>
-                <circle cx="11.5" cy="8" r="1.5" fill="white"/>
-                <path d="M6.5 11c0-1.4 1.1-2.5 2.5-2.5s2.5 1.1 2.5 2.5" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
+                <path d="M2 6.5 C4 4.5, 6 8.5, 9 6.5 C12 4.5, 14 8.5, 16 6.5" stroke="white" strokeWidth="2" strokeLinecap="round" fill="none" opacity="0.6"/>
+                <path d="M2 11.5 C4 9.5, 6 13.5, 9 11.5 C12 9.5, 14 13.5, 16 11.5" stroke="white" strokeWidth="2" strokeLinecap="round" fill="none"/>
               </svg>
             </div>
             <span className="font-black text-base tracking-tight hidden sm:block" style={{ color: 'var(--primary)', fontFamily: 'var(--font-jakarta)' }}>synkra</span>
@@ -1077,7 +1074,6 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
           >
             {myParticipant?.is_submitted ? 'Edit' : 'Done'}
           </button>
-          <ThemeToggle />
           {/* Chat toggle */}
           <button
             onClick={() => { setChatOpen(o => !o); setSidebarTab(t => t === 'chat' ? 'people' : 'chat') }}

@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import ThemeToggle from '@/components/ThemeToggle'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -100,7 +99,6 @@ export default function CreatePage() {
           </svg>
           Back to synkra
         </a>
-        <ThemeToggle />
       </nav>
 
       <div className="flex-1 flex items-center justify-center px-6 py-8">

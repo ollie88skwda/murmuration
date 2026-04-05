@@ -2,8 +2,6 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
-
 @theme inline {
   --font-sans: var(--font-inter);
   --font-display: var(--font-jakarta);
@@ -33,103 +31,39 @@
   --radius-3xl: calc(var(--radius) * 2.2);
 }
 
-/* ── Light mode ────────────────────────────────── */
+/* ── Synkra: Parchment + Aegean ─────────────────── */
 :root {
-  /* Flock brand */
-  --bg: #FEFCF9;
-  --bg-card: #FFFFFF;
-  --ink: #18151F;
-  --ink-2: #5C5875;
-  --ink-3: #A09CB8;
-  --primary-light: #E8EDF3;
-  --primary-dark: #040F1C;
-  --shadow-sm: 0 1px 2px rgba(9,36,65,0.05), 0 4px 12px rgba(9,36,65,0.08);
-  --shadow-md: 0 2px 4px rgba(9,36,65,0.07), 0 12px 32px rgba(9,36,65,0.12);
+  /* Core palette */
+  --bg: #F5EFE0;           /* warm parchment — Mediterranean paper */
+  --bg-card: #FBF7EE;      /* lighter cream for elevated surfaces */
+  --ink: #1A120B;          /* warm near-black */
+  --ink-2: #5A4838;        /* warm brown-gray for secondary text */
+  --ink-3: #9E8670;        /* warm muted */
+  --primary-light: #D6E8F8; /* soft Aegean wash — used for badges, highlights */
+  --primary-dark: #071525; /* deepest navy */
+  --shadow-sm: 0 1px 2px rgba(13,35,64,0.06), 0 4px 12px rgba(13,35,64,0.10);
+  --shadow-md: 0 2px 4px rgba(13,35,64,0.08), 0 12px 32px rgba(13,35,64,0.14);
 
-  /* Shadcn tokens — using our navy */
-  --background: #FEFCF9;
-  --foreground: #18151F;
-  --card: #FFFFFF;
-  --card-foreground: #18151F;
-  --popover: #FFFFFF;
-  --popover-foreground: #18151F;
-  --primary: #092441;
-  --primary-foreground: #FFFFFF;
-  --secondary: #F0EEF8;
-  --secondary-foreground: #18151F;
-  --muted: #F5F3FF;
-  --muted-foreground: #5C5875;
-  --accent: #E8EDF3;
-  --accent-foreground: #092441;
-  --destructive: #C0392B;
-  --border: #E8E6F0;
-  --input: #E8E6F0;
-  --ring: #092441;
+  /* Shadcn tokens */
+  --background: #F5EFE0;
+  --foreground: #1A120B;
+  --card: #FBF7EE;
+  --card-foreground: #1A120B;
+  --popover: #FBF7EE;
+  --popover-foreground: #1A120B;
+  --primary: #0E2347;          /* deep Aegean navy */
+  --primary-foreground: #F5EFE0; /* cream on navy */
+  --secondary: #EDE5D0;
+  --secondary-foreground: #1A120B;
+  --muted: #E5DCC8;
+  --muted-foreground: #5A4838;
+  --accent: #D6E8F8;
+  --accent-foreground: #0E2347;
+  --destructive: #B83232;
+  --border: #D0C4A4;       /* warm tan — sand between parchment and sea */
+  --input: #D0C4A4;
+  --ring: #0E2347;
   --radius: 0.75rem;
-}
-
-/* ── Dark mode ─────────────────────────────────── */
-.dark {
-  --bg: #1C1A22;
-  --bg-card: #242230;
-  --ink: #F0EEF8;
-  --ink-2: #9691B0;
-  --ink-3: #5E5A78;
-  --primary-light: #1A2535;
-  --primary-dark: #93C9EE;
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.2), 0 4px 12px rgba(0,0,0,0.25);
-  --shadow-md: 0 2px 4px rgba(0,0,0,0.25), 0 12px 32px rgba(0,0,0,0.35);
-
-  --background: #1C1A22;
-  --foreground: #F0EEF8;
-  --card: #242230;
-  --card-foreground: #F0EEF8;
-  --popover: #242230;
-  --popover-foreground: #F0EEF8;
-  --primary: #6EB3E3;
-  --primary-foreground: #0A1628;
-  --secondary: #2E2B3E;
-  --secondary-foreground: #F0EEF8;
-  --muted: #2E2B3E;
-  --muted-foreground: #9691B0;
-  --accent: #1A2535;
-  --accent-foreground: #6EB3E3;
-  --destructive: #FF6B6B;
-  --border: #2E2B3E;
-  --input: #2E2B3E;
-  --ring: #6EB3E3;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not(.light) {
-    --bg: #1C1A22;
-    --bg-card: #242230;
-    --ink: #F0EEF8;
-    --ink-2: #9691B0;
-    --ink-3: #5E5A78;
-    --primary-light: #1A2535;
-    --primary-dark: #93C9EE;
-    --shadow-sm: 0 1px 2px rgba(0,0,0,0.2), 0 4px 12px rgba(0,0,0,0.25);
-    --shadow-md: 0 2px 4px rgba(0,0,0,0.25), 0 12px 32px rgba(0,0,0,0.35);
-    --background: #1C1A22;
-    --foreground: #F0EEF8;
-    --card: #242230;
-    --card-foreground: #F0EEF8;
-    --popover: #242230;
-    --popover-foreground: #F0EEF8;
-    --primary: #6EB3E3;
-    --primary-foreground: #0A1628;
-    --secondary: #2E2B3E;
-    --secondary-foreground: #F0EEF8;
-    --muted: #2E2B3E;
-    --muted-foreground: #9691B0;
-    --accent: #1A2535;
-    --accent-foreground: #6EB3E3;
-    --destructive: #FF6B6B;
-    --border: #2E2B3E;
-    --input: #2E2B3E;
-    --ring: #6EB3E3;
-  }
 }
 
 * { box-sizing: border-box; }

@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import ThemeToggle from '@/components/ThemeToggle'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -32,7 +31,6 @@ export default function HomePage() {
       <nav className="flex items-center justify-between px-6 sm:px-10 py-5">
         <Logo />
         <div className="flex items-center gap-3">
-          <ThemeToggle />
           <a href="/create">
             <Button variant="outline" size="sm" className="rounded-full font-semibold" style={{ borderColor: 'var(--border)', color: 'var(--ink-2)' }}>
               New calendar
@@ -154,12 +152,45 @@ export default function HomePage() {
       <Separator style={{ background: 'var(--border)' }} />
       <section className="px-6 sm:px-10 py-8 grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-4xl mx-auto w-full">
         {[
-          { icon: '🗓️', title: 'Drag to block', desc: 'Mark when you\'re busy with a simple drag.' },
-          { icon: '🎨', title: 'Color-coded', desc: 'Each person gets a unique color. See overlaps instantly.' },
-          { icon: '⚡', title: 'Realtime', desc: 'Everyone sees updates live as they happen.' },
+          {
+            icon: (
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="14" height="14" rx="2"/>
+                <path d="M7 8h6M7 12h4"/>
+              </svg>
+            ),
+            title: 'Drag to block',
+            desc: "Mark when you're busy with a simple drag.",
+          },
+          {
+            icon: (
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                <circle cx="7" cy="10" r="4.5" fill="#0E2347" opacity="0.25"/>
+                <circle cx="13" cy="10" r="4.5" fill="#0E2347" opacity="0.25"/>
+                <path d="M10 6.2 C11.3 7.4 11.3 12.6 10 13.8 C8.7 12.6 8.7 7.4 10 6.2Z" fill="#0E2347" opacity="0.7"/>
+              </svg>
+            ),
+            title: 'Color-coded',
+            desc: 'Each person gets a unique color. See overlaps instantly.',
+          },
+          {
+            icon: (
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                <path d="M3 10 C5 8, 7 12, 10 10 C13 8, 15 12, 17 10" opacity="0.4"/>
+                <path d="M3 14 C5 12, 7 16, 10 14 C13 12, 15 16, 17 14"/>
+              </svg>
+            ),
+            title: 'Realtime',
+            desc: 'Everyone sees updates live as they happen.',
+          },
         ].map(f => (
           <div key={f.title} className="flex items-start gap-3">
-            <span className="text-2xl flex-shrink-0 mt-0.5">{f.icon}</span>
+            <div
+              className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center mt-0.5"
+              style={{ background: 'var(--primary-light)', color: 'var(--primary)' }}
+            >
+              {f.icon}
+            </div>
             <div>
               <p className="font-semibold text-sm mb-0.5" style={{ color: 'var(--ink)' }}>{f.title}</p>
               <p className="text-sm" style={{ color: 'var(--ink-2)' }}>{f.desc}</p>
@@ -181,16 +212,15 @@ function ArrowRight() {
 
 function Logo() {
   return (
-    <a href="/" className="flex items-center gap-2">
+    <a href="/" className="flex items-center gap-2.5">
       <div
-        className="w-8 h-8 rounded-xl flex items-center justify-center"
+        className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
         style={{ background: 'var(--primary)' }}
       >
+        {/* Two merging waves — syn (together) + kra (blending) */}
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-          <path d="M9 2C5.5 2 3 4.5 3 7.5c0 2 1 3.8 2.5 4.8L9 14.5l3.5-2.2C14 11.3 15 9.5 15 7.5 15 4.5 12.5 2 9 2z" fill="white" opacity="0.3"/>
-          <circle cx="6.5" cy="8" r="1.5" fill="white"/>
-          <circle cx="11.5" cy="8" r="1.5" fill="white"/>
-          <path d="M6.5 11c0-1.4 1.1-2.5 2.5-2.5s2.5 1.1 2.5 2.5" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
+          <path d="M2 6.5 C4 4.5, 6 8.5, 9 6.5 C12 4.5, 14 8.5, 16 6.5" stroke="white" strokeWidth="2" strokeLinecap="round" fill="none" opacity="0.6"/>
+          <path d="M2 11.5 C4 9.5, 6 13.5, 9 11.5 C12 9.5, 14 13.5, 16 11.5" stroke="white" strokeWidth="2" strokeLinecap="round" fill="none"/>
         </svg>
       </div>
       <span className="text-lg font-bold tracking-tight" style={{ color: 'var(--ink)', fontFamily: 'var(--font-jakarta)' }}>
@@ -203,7 +233,7 @@ function Logo() {
 function GridPreview() {
   const cols = 5
   const rows = 6
-  const colors = ['#092441', '#E45C3A', '#0EA5E9', '#10B981', '#F59E0B']
+  const colors = ['#0E2347', '#C4602A', '#1A73B8', '#2A7D5A', '#B8892A']
   const blocks = [
     { col: 1, row: 1, h: 2, ci: 0 },
     { col: 2, row: 0, h: 3, ci: 1 },

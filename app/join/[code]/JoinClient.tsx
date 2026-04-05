@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { tierColor, hueForIndex } from '@/lib/colors'
 import { saveToHistory } from '@/lib/history'
-import ThemeToggle from '@/components/ThemeToggle'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -77,7 +76,6 @@ export default function JoinClient({ calendar }: { calendar: Calendar }) {
           </svg>
           synkra
         </a>
-        <ThemeToggle />
       </nav>
 
       <div className="flex-1 flex items-center justify-center px-6 py-8">

@@ -5,7 +5,6 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { hueForIndex } from '@/lib/colors'
-import ThemeToggle from '@/components/ThemeToggle'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -56,7 +55,6 @@ export default function ShareClient({ calendar }: { calendar: Calendar }) {
           </svg>
           synkra
         </a>
-        <ThemeToggle />
       </nav>
 
       <div className="flex-1 flex items-center justify-center px-6 py-8">
