@@ -35,7 +35,7 @@ export default function ThemeToggle() {
     <button
       onClick={toggle}
       aria-label="Toggle dark mode"
-      className="w-8 h-8 flex items-center justify-center transition-colors"
+      className="w-11 h-11 flex items-center justify-center transition-colors"
       style={{ color: 'var(--ink-2)', borderRadius: 8 }}
     >
       {isDark ? (

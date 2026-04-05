@@ -134,7 +134,7 @@ export default function ChatPanel({ calendarId, participantId, participants, onC
         </div>
         <button
           onClick={onClose}
-          className="w-7 h-7 flex items-center justify-center rounded-full transition-colors"
+          className="w-11 h-11 flex items-center justify-center rounded-full transition-colors"
           onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg)')}
           onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
           style={{ color: 'var(--ink-2)' }}
@@ -234,7 +234,7 @@ export default function ChatPanel({ calendarId, participantId, participants, onC
             <button
               onClick={sendMessage}
               disabled={!input.trim() || sending}
-              className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-xl transition-all"
+              className="flex-shrink-0 w-11 h-11 flex items-center justify-center rounded-xl transition-all"
               style={{
                 background: input.trim() && !sending ? 'var(--primary)' : 'var(--border)',
                 color: input.trim() && !sending ? '#fff' : 'var(--ink-3)',

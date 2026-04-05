@@ -270,6 +270,43 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
     if (dragging) { finalizeDrag(dragging); setDragging(null) }
   }
 
+  // ── Touch drag (mobile block creation) ───────────────────────────────────
+  // React 18 registers touch listeners as passive, so e.preventDefault() inside
+  // onTouchMove is silently ignored. We use a non-passive document listener instead.
+  const touchDragRef = useRef<{ dateIdx: number } | null>(null)
+
+  useEffect(() => {
+    function onTouchMove(e: TouchEvent) {
+      if (!touchDragRef.current) return
+      e.preventDefault() // blocks scroll & pull-to-refresh while dragging
+      const touch = e.touches[0]
+      const el = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement | null
+      if (!el) return
+      const cell = el.closest('[data-dateidx]') as HTMLElement | null
+      if (!cell) return
+      const dIdx = parseInt(cell.dataset.dateidx!)
+      const sIdx = parseInt(cell.dataset.slotidx!)
+      if (dIdx === touchDragRef.current.dateIdx) {
+        setDragging(prev => prev ? { ...prev, endSlotIdx: sIdx } : null)
+      }
+    }
+    document.addEventListener('touchmove', onTouchMove, { passive: false })
+    return () => document.removeEventListener('touchmove', onTouchMove)
+  }, [])
+
+  function handleCellTouchStart(dateIdx: number, slotIdx: number, e: React.TouchEvent) {
+    if (cal.is_locked || !myParticipantId) return
+    if (!isActiveDate(visibleDates[dateIdx])) return
+    e.preventDefault() // stop the initial scroll/pull-to-refresh gesture
+    touchDragRef.current = { dateIdx }
+    setDragging({ dateIdx, startSlotIdx: slotIdx, endSlotIdx: slotIdx })
+  }
+
+  function handleRootTouchEnd() {
+    touchDragRef.current = null
+    handleMouseUp()
+  }
+
   async function handleBlockClick(block: Block, e: React.MouseEvent) {
     e.stopPropagation()
     if (block.participant_id !== myParticipantId || cal.is_locked) return
@@ -740,7 +777,7 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
         <div style={fillWidth ? { width: '100%', height: '100%', display: 'flex', flexDirection: 'column' } : { minWidth: TIME_COL_WIDTH + visibleDates.length * COL_WIDTH }}>
           {/* Column headers */}
           <div className="flex sticky top-0 z-20 border-b flex-shrink-0" style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}>
-            <div style={{ width: TIME_COL_WIDTH, minWidth: TIME_COL_WIDTH, borderColor: 'var(--border)' }} className="flex-shrink-0 border-r" />
+            <div style={{ width: TIME_COL_WIDTH, minWidth: TIME_COL_WIDTH, borderColor: 'var(--border)', position: 'sticky', left: 0, background: 'var(--bg-card)', zIndex: 2 }} className="flex-shrink-0 border-r" />
             {visibleDates.map(dateStr => {
               const { short, day } = formatDate(dateStr)
               const weekend = isWeekend(dateStr)
@@ -766,12 +803,23 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
 
           {/* Body */}
           <div className={fillWidth ? 'flex flex-1' : 'flex'}>
-            {/* Time column */}
-            <div style={{ width: TIME_COL_WIDTH, minWidth: TIME_COL_WIDTH, borderColor: 'var(--border)' }} className="flex-shrink-0 border-r">
-              {slots.map(slot => (
-                <div key={slot} style={{ height: SLOT_HEIGHT }} className="flex items-start justify-end pr-2 pt-0.5">
+            {/* Time column — sticky left so it stays visible when scrolling horizontally */}
+            <div style={{ width: TIME_COL_WIDTH, minWidth: TIME_COL_WIDTH, borderColor: 'var(--border)', position: 'sticky', left: 0, zIndex: 10, background: 'var(--bg)' }} className="flex-shrink-0 border-r">
+              {slots.map((slot, slotIdx) => (
+                <div key={slot} style={{ height: SLOT_HEIGHT, position: 'relative' }}>
                   {slot.endsWith(':00') && (
-                    <span style={{ fontSize: 11, color: 'var(--ink-2)', fontWeight: 700, letterSpacing: '0.01em' }}>{formatTime(slot)}</span>
+                    <span style={{
+                      position: 'absolute',
+                      right: 8,
+                      top: slotIdx === 0 ? 3 : 0,
+                      transform: slotIdx === 0 ? 'none' : 'translateY(-50%)',
+                      fontSize: 11,
+                      color: 'var(--ink-2)',
+                      fontWeight: 700,
+                      letterSpacing: '0.01em',
+                      whiteSpace: 'nowrap',
+                      lineHeight: 1,
+                    }}>{formatTime(slot)}</span>
                   )}
                 </div>
               ))}
@@ -795,13 +843,17 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
                   {slots.map((slot, slotIdx) => (
                     <div
                       key={slot}
+                      data-dateidx={dateIdx}
+                      data-slotidx={slotIdx}
                       style={{
                         height: SLOT_HEIGHT,
                         borderTop: slotIdx > 0 && slot.endsWith(':00') ? '1px solid var(--border)' : 'none',
                         cursor: active ? 'crosshair' : 'default',
+                        touchAction: active ? 'none' : 'auto',
                       }}
                       onMouseDown={active ? e => handleCellMouseDown(dateIdx, slotIdx, e) : undefined}
                       onMouseEnter={active ? () => handleCellMouseEnter(dateIdx, slotIdx) : undefined}
+                      onTouchStart={active ? e => handleCellTouchStart(dateIdx, slotIdx, e) : undefined}
                     />
                   ))}
                   {/* Overlays */}
@@ -841,6 +893,7 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
       className="flex flex-col h-screen overflow-hidden no-select"
       style={{ background: 'var(--bg)' }}
       onMouseUp={handleMouseUp}
+      onTouchEnd={handleRootTouchEnd}
       onClick={() => setContextMenu(null)}
     >
       {/* Header */}
@@ -852,7 +905,7 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
           <a
             href="/"
-            className="flex items-center gap-1.5 flex-shrink-0 group"
+            className="flex items-center gap-1.5 flex-shrink-0 group min-w-[44px] min-h-[44px]"
           >
             <div
               className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 transition-opacity group-hover:opacity-80"
@@ -893,7 +946,7 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
           <button
             onClick={handleDone}
             disabled={submitting || cal.is_locked}
-            className="text-xs font-bold px-3 py-1.5 rounded-lg transition-all"
+            className="text-xs font-bold px-3 py-2.5 rounded-lg transition-all min-h-[44px]"
             style={{
               background: myParticipant?.is_submitted ? 'var(--ink)' : 'var(--primary)',
               color: myParticipant?.is_submitted ? 'var(--bg)' : 'var(--primary-foreground)',
@@ -906,7 +959,7 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
           {/* Chat toggle */}
           <button
             onClick={() => { setChatOpen(o => !o); setSidebarTab(t => t === 'chat' ? 'people' : 'chat') }}
-            className="flex items-center justify-center w-7 h-7 rounded-lg border transition-colors"
+            className="flex items-center justify-center w-11 h-11 rounded-lg border transition-colors"
             style={{
               borderColor: sidebarTab === 'chat' ? 'var(--primary)' : 'var(--border)',
               color: sidebarTab === 'chat' ? 'var(--primary)' : 'var(--ink-2)',
@@ -921,7 +974,7 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
           </button>
           <button
             onClick={() => setLegendOpen(o => !o)}
-            className="sm:hidden flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg border"
+            className="sm:hidden flex items-center gap-1 text-xs font-semibold px-2.5 py-2.5 rounded-lg border min-h-[44px]"
             style={{ borderColor: 'var(--border)', color: 'var(--ink-2)', background: 'var(--bg-card)' }}
           >
             {participants.length}
@@ -949,7 +1002,7 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
               <button
                 onClick={() => setViewOffset(o => Math.max(0, o - 1))}
                 disabled={viewOffset === 0}
-                className="w-7 h-7 rounded-lg flex items-center justify-center"
+                className="w-11 h-11 rounded-lg flex items-center justify-center"
                 onMouseEnter={e => { if (viewOffset > 0) (e.currentTarget as HTMLElement).style.background = 'var(--bg)' }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
                 style={{ color: viewOffset > 0 ? 'var(--ink)' : 'var(--ink-3)', opacity: viewOffset > 0 ? 1 : 0.4, cursor: viewOffset > 0 ? 'pointer' : 'default' }}
@@ -957,11 +1010,11 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
               >
                 <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" viewBox="0 0 12 12"><path d="M8 2L4 6l4 4"/></svg>
               </button>
-              <span className="text-xs font-semibold truncate" style={{ color: 'var(--ink-2)', maxWidth: 100 }}>{getNavLabel()}</span>
+              <span className="text-xs font-semibold" style={{ color: 'var(--ink-2)', whiteSpace: 'nowrap' }}>{getNavLabel()}</span>
               <button
                 onClick={() => setViewOffset(o => view === 'week' ? Math.min(maxWeekOffset, o + 1) : Math.min(maxDayOffset, o + 1))}
                 disabled={view === 'week' ? viewOffset >= maxWeekOffset : viewOffset >= maxDayOffset}
-                className="w-7 h-7 rounded-lg flex items-center justify-center"
+                className="w-11 h-11 rounded-lg flex items-center justify-center"
                 onMouseEnter={e => { const canNext = view === 'week' ? viewOffset < maxWeekOffset : viewOffset < maxDayOffset; if (canNext) (e.currentTarget as HTMLElement).style.background = 'var(--bg)' }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
                 style={{ color: (view === 'week' ? viewOffset < maxWeekOffset : viewOffset < maxDayOffset) ? 'var(--ink)' : 'var(--ink-3)', opacity: (view === 'week' ? viewOffset < maxWeekOffset : viewOffset < maxDayOffset) ? 1 : 0.4, cursor: (view === 'week' ? viewOffset < maxWeekOffset : viewOffset < maxDayOffset) ? 'pointer' : 'default' }}
@@ -978,7 +1031,7 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
             <button
               key={v}
               onClick={() => { setView(v); setViewOffset(0) }}
-              className="text-xs font-semibold px-3 py-1.5 transition-all"
+              className="text-xs font-semibold px-3 py-2.5 transition-all min-h-[44px]"
               style={{
                 background: view === v ? 'var(--primary)' : 'var(--bg-card)',
                 color: view === v ? 'white' : 'var(--ink-2)',
@@ -995,7 +1048,7 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
           {myParticipantId && (
             <button
               onClick={() => setEditMode(o => !o)}
-              className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition-all"
+              className="text-xs font-semibold px-2.5 py-2.5 rounded-lg border transition-all min-h-[44px]"
               style={{
                 background: editMode ? 'var(--primary)' : 'var(--bg-card)',
                 color: editMode ? 'white' : 'var(--ink-2)',
@@ -1011,10 +1064,10 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
 
       {/* Hint */}
       {showHint && !cal.is_locked && myParticipant && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 text-sm font-medium text-white px-4 py-2.5 rounded-2xl shadow-xl"
-          style={{ background: 'var(--ink)', marginTop: 16 }}>
+        <div className="flex-shrink-0 flex items-center justify-center gap-3 text-sm font-medium text-white px-4 py-2.5"
+          style={{ background: 'var(--ink)' }}>
           <span>Drag to mark when you&apos;re <strong>not</strong> free</span>
-          <button onClick={() => setShowHint(false)} className="text-white/50 hover:text-white text-base leading-none">×</button>
+          <button onClick={() => setShowHint(false)} className="text-white/50 hover:text-white text-base leading-none min-w-[44px] min-h-[44px] flex items-center justify-center">×</button>
         </div>
       )}
 
@@ -1023,7 +1076,7 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
         {view === 'month' ? renderMonthView() : renderGridView()}
 
         {/* Legend sidebar */}
-        <aside className="hidden sm:flex flex-col w-52 flex-shrink-0 border-l" style={{ borderColor: 'var(--border)', background: 'var(--bg-card)' }}>
+        <aside className="hidden sm:flex flex-col w-80 flex-shrink-0 border-l" style={{ borderColor: 'var(--border)', background: 'var(--bg-card)' }}>
           {/* Tabs */}
           <div className="flex border-b flex-shrink-0" style={{ borderColor: 'var(--border)' }}>
             {(['people', 'chat'] as const).map(tab => (
@@ -1204,7 +1257,7 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
           <div className="relative rounded-t-3xl overflow-hidden max-h-[65vh]" style={{ background: 'var(--bg-card)' }}>
             <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b" style={{ borderColor: 'var(--border)' }}>
               <p className="font-bold" style={{ color: 'var(--ink)' }}>{participants.length} participant{participants.length !== 1 ? 's' : ''}</p>
-              <button onClick={() => setLegendOpen(false)} className="w-7 h-7 rounded-full flex items-center justify-center text-lg" style={{ background: 'var(--bg)', color: 'var(--ink-2)' }}>×</button>
+              <button onClick={() => setLegendOpen(false)} className="w-11 h-11 rounded-full flex items-center justify-center text-lg" style={{ background: 'var(--bg)', color: 'var(--ink-2)' }}>×</button>
             </div>
             <div className="overflow-y-auto p-3">
               {participants.map(p => (
