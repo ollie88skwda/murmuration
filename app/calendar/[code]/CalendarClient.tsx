@@ -88,16 +88,27 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
   const [gcalImporting, setGcalImporting] = useState(false)
   const [gcalImportCount, setGcalImportCount] = useState<number | null>(null)
   const [gcalError, setGcalError] = useState<string | null>(null)
+  // Infinite calendar: number of days to show from start_date
+  const [infiniteVisibleDays, setInfiniteVisibleDays] = useState(21)
+
+  // For infinite calendars, compute a rolling end date based on how many days are loaded
+  const effectiveEndDate = cal.is_infinite
+    ? (() => {
+        const d = new Date(cal.start_date + 'T00:00:00')
+        d.setDate(d.getDate() + infiniteVisibleDays - 1)
+        return d.toISOString().slice(0, 10)
+      })()
+    : cal.end_date
 
   const allDates = (() => {
-    const dates = getDateRange(cal.start_date, cal.end_date)
+    const dates = getDateRange(cal.start_date, effectiveEndDate)
     if (!cal.selected_days_of_week) return dates
     return dates.filter(d => {
       const dow = new Date(d + 'T00:00:00').getDay()
       return cal.selected_days_of_week!.includes(dow)
     })
   })()
-  const allDatesRaw = getDateRange(cal.start_date, cal.end_date)
+  const allDatesRaw = getDateRange(cal.start_date, effectiveEndDate)
   const isActiveDate = (dateStr: string) => {
     if (!cal.selected_days_of_week) return true
     const dow = new Date(dateStr + 'T00:00:00').getDay()
@@ -537,7 +548,7 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
       const params = new URLSearchParams({
         accessToken: gcalToken.accessToken,
         startDate: cal.start_date,
-        endDate: cal.end_date,
+        endDate: effectiveEndDate,
       })
       const res = await fetch(`/api/gcal/events?${params.toString()}`)
       if (!res.ok) {
@@ -920,6 +931,9 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
                 </div>
               )
             })}
+            {cal.is_infinite && !fillWidth && (
+              <div className="flex-shrink-0 border-r" style={{ width: 80, borderColor: 'var(--border)', background: 'var(--bg)' }} />
+            )}
           </div>
 
           {/* Body */}
@@ -988,6 +1002,26 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
                 </div>
               )
             })}
+            {/* Infinite: load more column */}
+            {cal.is_infinite && !fillWidth && (
+              <div
+                className="flex-shrink-0 flex items-center justify-center border-r"
+                style={{ width: 80, borderColor: 'var(--border)', background: 'var(--bg)' }}
+              >
+                <button
+                  onClick={() => setInfiniteVisibleDays(d => d + 14)}
+                  className="flex flex-col items-center gap-1.5 px-2 py-3 rounded-xl transition-colors text-center"
+                  style={{ color: 'var(--ink-3)' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'var(--primary)' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--ink-3)' }}
+                >
+                  <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 16 16">
+                    <path d="M8 3v10M3 8l5 5 5-5"/>
+                  </svg>
+                  <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.03em', lineHeight: 1.3 }}>2 more<br/>weeks</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1130,12 +1164,18 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
               </button>
               <span className="text-xs font-semibold" style={{ color: 'var(--ink-2)', whiteSpace: 'nowrap' }}>{getNavLabel()}</span>
               <button
-                onClick={() => setViewOffset(o => view === 'week' ? Math.min(maxWeekOffset, o + 1) : Math.min(maxDayOffset, o + 1))}
-                disabled={view === 'week' ? viewOffset >= maxWeekOffset : viewOffset >= maxDayOffset}
+                onClick={() => {
+                  const atEdge = view === 'week' ? viewOffset >= maxWeekOffset : viewOffset >= maxDayOffset
+                  if (cal.is_infinite && atEdge) {
+                    setInfiniteVisibleDays(d => d + 14)
+                  }
+                  setViewOffset(o => view === 'week' ? o + 1 : o + 1)
+                }}
+                disabled={!cal.is_infinite && (view === 'week' ? viewOffset >= maxWeekOffset : viewOffset >= maxDayOffset)}
                 className="w-11 h-11 rounded-lg flex items-center justify-center"
-                onMouseEnter={e => { const canNext = view === 'week' ? viewOffset < maxWeekOffset : viewOffset < maxDayOffset; if (canNext) (e.currentTarget as HTMLElement).style.background = 'var(--bg)' }}
+                onMouseEnter={e => { const canNext = cal.is_infinite || (view === 'week' ? viewOffset < maxWeekOffset : viewOffset < maxDayOffset); if (canNext) (e.currentTarget as HTMLElement).style.background = 'var(--bg)' }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
-                style={{ color: (view === 'week' ? viewOffset < maxWeekOffset : viewOffset < maxDayOffset) ? 'var(--ink)' : 'var(--ink-3)', opacity: (view === 'week' ? viewOffset < maxWeekOffset : viewOffset < maxDayOffset) ? 1 : 0.4, cursor: (view === 'week' ? viewOffset < maxWeekOffset : viewOffset < maxDayOffset) ? 'pointer' : 'default' }}
+                style={{ color: (cal.is_infinite || (view === 'week' ? viewOffset < maxWeekOffset : viewOffset < maxDayOffset)) ? 'var(--ink)' : 'var(--ink-3)', opacity: (cal.is_infinite || (view === 'week' ? viewOffset < maxWeekOffset : viewOffset < maxDayOffset)) ? 1 : 0.4 }}
                 aria-label="Next"
               >
                 <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" viewBox="0 0 12 12"><path d="M4 2l4 4-4 4"/></svg>

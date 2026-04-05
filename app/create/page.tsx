@@ -26,6 +26,7 @@ export default function CreatePage() {
   const [name, setName] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+  const [isInfinite, setIsInfinite] = useState(false)
   const [startTime, setStartTime] = useState('08:00')
   const [endTime, setEndTime] = useState('23:00')
   const [selectedDays, setSelectedDays] = useState<number[]>(ALL_DAYS)
@@ -49,23 +50,27 @@ export default function CreatePage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
-    if (!name || !startDate || !endDate) return
-    if (endDate < startDate) { setError('End date must be after start date.'); return }
+    if (!name || !startDate) return
+    if (!isInfinite && !endDate) return
+    if (!isInfinite && endDate < startDate) { setError('End date must be after start date.'); return }
     setLoading(true)
     try {
       let code = generateCode()
       const { data: existing } = await supabase.from('calendars').select('code').eq('code', code).single()
       if (existing) code = generateCode()
-      const expiresAt = new Date(endDate)
-      expiresAt.setDate(expiresAt.getDate() + 30)
+      const effectiveEnd = isInfinite ? startDate : endDate
+      const expiresAt = new Date(effectiveEnd)
+      expiresAt.setFullYear(expiresAt.getFullYear() + (isInfinite ? 10 : 0))
+      expiresAt.setDate(expiresAt.getDate() + (isInfinite ? 0 : 30))
       const daysToStore = selectedDays.length === 7 ? null : selectedDays
       const { data: cal, error: calErr } = await supabase
         .from('calendars')
         .insert({
           code, name,
-          start_date: startDate, end_date: endDate,
+          start_date: startDate, end_date: effectiveEnd,
           day_start_time: startTime, day_end_time: endTime,
           expires_at: expiresAt.toISOString(),
+          is_infinite: isInfinite,
           selected_days_of_week: daysToStore,
         })
         .select().single()
@@ -128,31 +133,58 @@ export default function CreatePage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="start-date" style={{ color: 'var(--ink)' }}>Start date</Label>
-                    <Input
-                      id="start-date"
-                      type="date"
-                      value={startDate}
-                      min={today}
-                      onChange={e => setStartDate(e.target.value)}
-                      required
-                      style={{ background: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--ink)' }}
-                    />
+                <div className="space-y-3">
+                  <div className={`grid gap-4 ${isInfinite ? 'grid-cols-1' : 'grid-cols-2'}`}>
+                    <div className="space-y-2">
+                      <Label htmlFor="start-date" style={{ color: 'var(--ink)' }}>Start date</Label>
+                      <Input
+                        id="start-date"
+                        type="date"
+                        value={startDate}
+                        min={today}
+                        onChange={e => setStartDate(e.target.value)}
+                        required
+                        style={{ background: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--ink)' }}
+                      />
+                    </div>
+                    {!isInfinite && (
+                      <div className="space-y-2">
+                        <Label htmlFor="end-date" style={{ color: 'var(--ink)' }}>End date</Label>
+                        <Input
+                          id="end-date"
+                          type="date"
+                          value={endDate}
+                          min={startDate || today}
+                          onChange={e => setEndDate(e.target.value)}
+                          required
+                          style={{ background: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--ink)' }}
+                        />
+                      </div>
+                    )}
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="end-date" style={{ color: 'var(--ink)' }}>End date</Label>
-                    <Input
-                      id="end-date"
-                      type="date"
-                      value={endDate}
-                      min={startDate || today}
-                      onChange={e => setEndDate(e.target.value)}
-                      required
-                      style={{ background: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--ink)' }}
-                    />
-                  </div>
+                  {/* Infinite toggle */}
+                  <button
+                    type="button"
+                    onClick={() => setIsInfinite(v => !v)}
+                    className="flex items-center gap-2.5 text-sm transition-colors"
+                    style={{ color: isInfinite ? 'var(--primary)' : 'var(--ink-3)' }}
+                  >
+                    <div
+                      className="relative flex-shrink-0 w-9 h-5 rounded-full transition-colors"
+                      style={{ background: isInfinite ? 'var(--primary)' : 'var(--border)' }}
+                    >
+                      <div
+                        className="absolute top-0.5 w-4 h-4 rounded-full transition-all"
+                        style={{
+                          background: 'white',
+                          left: isInfinite ? 'calc(100% - 18px)' : '2px',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                        }}
+                      />
+                    </div>
+                    <span className="font-medium">No end date</span>
+                    <span className="text-xs" style={{ color: 'var(--ink-3)' }}>— keep adding weeks as you go</span>
+                  </button>
                 </div>
 
                 {/* Day selection */}

@@ -8,6 +8,7 @@ export interface Calendar {
   day_start_time: string
   day_end_time: string
   is_locked: boolean
+  is_infinite: boolean
   selected_days_of_week: number[] | null
   created_at: string
   expires_at: string
