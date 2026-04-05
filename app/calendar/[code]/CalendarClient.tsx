@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Calendar, Participant, Block, TIER_LABELS } from '@/lib/types'
@@ -69,7 +69,8 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
   const [submitting, setSubmitting] = useState(false)
   const [locking, setLocking] = useState(false)
   const [chatOpen, setChatOpen] = useState(false) // mobile bottom sheet
-  const [sidebarTab, setSidebarTab] = useState<'people' | 'chat'>('people') // desktop sidebar
+  const [sidebarTab, setSidebarTab] = useState<'people' | 'chat' | 'best'>('people') // desktop sidebar
+  const [meetingDuration, setMeetingDuration] = useState(60) // minutes
   const [editMode, setEditMode] = useState(false)
   const [editingTime, setEditingTime] = useState<{ blockId: string; startTime: string; endTime: string } | null>(null)
   const [editingName, setEditingName] = useState(false)
@@ -98,7 +99,65 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
     const dow = new Date(dateStr + 'T00:00:00').getDay()
     return cal.selected_days_of_week.includes(dow)
   }
+
   const slots = getTimeSlots(cal.day_start_time, cal.day_end_time)
+
+  // ── Best-time algorithm ───────────────────────────────────────────────────
+  const bestTimes = useMemo(() => {
+    // Prefer submitted participants; fall back to everyone
+    const pool = participants.filter(p => p.is_submitted)
+    const considered = pool.length > 0 ? pool : participants
+    if (considered.length === 0 || slots.length === 0) return []
+
+    const slotsPerWindow = Math.max(1, meetingDuration / 30)
+    type Suggestion = { date: string; startTime: string; endTime: string; score: number; freeCount: number; total: number; conflicts: { name: string; tier: 1|2|3 }[] }
+    const results: Suggestion[] = []
+
+    for (const date of allDates) {
+      for (let i = 0; i <= slots.length - slotsPerWindow; i++) {
+        const windowStart = slots[i]
+        const windowEnd = addThirtyMin(slots[i + slotsPerWindow - 1])
+        let score = 0
+        let freeCount = 0
+        const conflicts: { name: string; tier: 1|2|3 }[] = []
+
+        for (const p of considered) {
+          const hit = blocks.filter(b =>
+            b.participant_id === p.id &&
+            b.date === date &&
+            b.start_time < windowEnd &&
+            b.end_time > windowStart
+          )
+          if (hit.length === 0) {
+            freeCount++
+          } else {
+            const maxTier = Math.max(...hit.map(b => b.tier)) as 1|2|3
+            score += maxTier === 3 ? 10 : maxTier === 2 ? 3 : 1
+            conflicts.push({ name: p.name, tier: maxTier })
+          }
+        }
+
+        results.push({ date, startTime: windowStart, endTime: windowEnd, score, freeCount, total: considered.length, conflicts })
+      }
+    }
+
+    results.sort((a, b) =>
+      a.score - b.score ||
+      a.date.localeCompare(b.date) ||
+      a.startTime.localeCompare(b.startTime)
+    )
+
+    // Deduplicate: skip windows that overlap with an already-selected one on the same date
+    const picked: Suggestion[] = []
+    for (const r of results) {
+      if (picked.length >= 5) break
+      const overlaps = picked.some(p =>
+        p.date === r.date && p.startTime < r.endTime && p.endTime > r.startTime
+      )
+      if (!overlaps) picked.push(r)
+    }
+    return picked
+  }, [participants, blocks, slots, allDates, meetingDuration])
   const timeOptions = Array.from({ length: 48 }, (_, i) => {
     const h = Math.floor(i / 2), m = i % 2 === 0 ? '00' : '30'
     const val = `${String(h).padStart(2, '0')}:${m}`
@@ -1111,7 +1170,7 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
         <aside className="hidden sm:flex flex-col w-80 flex-shrink-0 border-l" style={{ borderColor: 'var(--border)', background: 'var(--bg-card)' }}>
           {/* Tabs */}
           <div className="flex border-b flex-shrink-0" style={{ borderColor: 'var(--border)' }}>
-            {(['people', 'chat'] as const).map(tab => (
+            {(['people', 'best', 'chat'] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => setSidebarTab(tab)}
@@ -1122,7 +1181,7 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
                   background: 'transparent',
                 }}
               >
-                {tab === 'people' ? `People (${participants.length})` : 'Chat'}
+                {tab === 'people' ? `People (${participants.length})` : tab === 'best' ? '✦ Best' : 'Chat'}
               </button>
             ))}
           </div>
@@ -1136,6 +1195,84 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
                 participants={participants}
                 onClose={() => setSidebarTab('people')}
               />
+            </div>
+          )}
+
+          {/* Best times tab */}
+          {sidebarTab === 'best' && (
+            <div className="flex flex-col flex-1 overflow-hidden">
+              {/* Duration picker */}
+              <div className="flex-shrink-0 flex items-center gap-2 px-4 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
+                <span className="text-xs font-semibold" style={{ color: 'var(--ink-2)' }}>Duration</span>
+                <div className="flex rounded-lg overflow-hidden border ml-auto" style={{ borderColor: 'var(--border)' }}>
+                  {[30, 60, 90, 120].map(d => (
+                    <button
+                      key={d}
+                      onClick={() => setMeetingDuration(d)}
+                      className="px-2.5 py-1 text-xs font-semibold transition-all"
+                      style={{
+                        background: meetingDuration === d ? 'var(--primary)' : 'var(--bg-card)',
+                        color: meetingDuration === d ? 'white' : 'var(--ink-2)',
+                        borderRight: d !== 120 ? '1px solid var(--border)' : 'none',
+                      }}
+                    >
+                      {d < 60 ? `${d}m` : `${d/60}h`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="overflow-y-auto flex-1 p-3 flex flex-col gap-2">
+                {participants.length === 0 && (
+                  <p className="text-sm p-2" style={{ color: 'var(--ink-3)' }}>No participants yet.</p>
+                )}
+                {participants.length > 0 && bestTimes.length === 0 && (
+                  <p className="text-sm p-2" style={{ color: 'var(--ink-3)' }}>No available windows found.</p>
+                )}
+                {bestTimes.map((s, i) => {
+                  const allFree = s.freeCount === s.total
+                  const { short, day } = formatDate(s.date)
+                  const tierColors: Record<1|2|3, string> = { 1: '#F59E0B', 2: '#8B5CF6', 3: '#EF4444' }
+                  return (
+                    <div
+                      key={`${s.date}-${s.startTime}`}
+                      className="rounded-xl p-3 border"
+                      style={{
+                        background: i === 0 ? 'var(--primary-light)' : 'var(--bg)',
+                        borderColor: i === 0 ? 'var(--primary)' : 'var(--border)',
+                      }}
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-1.5">
+                        <div>
+                          {i === 0 && (
+                            <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--primary)' }}>Best</span>
+                          )}
+                          <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>{day}</p>
+                          <p className="text-xs" style={{ color: 'var(--ink-2)' }}>{formatTime(s.startTime)} – {formatTime(s.endTime)}</p>
+                        </div>
+                        <div className="flex-shrink-0 text-right">
+                          <p className="text-lg font-black leading-none" style={{ color: allFree ? '#10B981' : 'var(--ink)' }}>{s.freeCount}<span className="text-xs font-semibold">/{s.total}</span></p>
+                          <p className="text-[10px]" style={{ color: 'var(--ink-3)' }}>free</p>
+                        </div>
+                      </div>
+                      {s.conflicts.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {s.conflicts.map(c => (
+                            <span key={c.name} className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: `${tierColors[c.tier]}22`, color: tierColors[c.tier] }}>
+                              {c.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+                {bestTimes.length > 0 && (
+                  <p className="text-[10px] text-center mt-1" style={{ color: 'var(--ink-3)' }}>
+                    {participants.filter(p => p.is_submitted).length === 0 ? 'Based on all participants (none submitted yet)' : `Based on ${participants.filter(p => p.is_submitted).length} submitted`}
+                  </p>
+                )}
+              </div>
             </div>
           )}
 
