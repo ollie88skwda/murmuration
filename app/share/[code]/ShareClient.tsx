@@ -27,12 +27,12 @@ export default function ShareClient({ calendar }: { calendar: Calendar }) {
   }
 
   useEffect(() => {
-    const stored = localStorage.getItem(`flock_${calendar.code}`)
+    const stored = localStorage.getItem(`synkra_${calendar.code}`)
     if (stored) return
     async function registerHost() {
       const { data: existing } = await supabase.from('participants').select('*').eq('calendar_id', calendar.id).ilike('name', 'Host').single()
       if (existing) {
-        localStorage.setItem(`flock_${calendar.code}`, JSON.stringify({ participantId: existing.id, calendarId: calendar.id }))
+        localStorage.setItem(`synkra_${calendar.code}`, JSON.stringify({ participantId: existing.id, calendarId: calendar.id }))
         if (!calendar.host_participant_id) await supabase.from('calendars').update({ host_participant_id: existing.id }).eq('id', calendar.id)
         return
       }
@@ -41,7 +41,7 @@ export default function ShareClient({ calendar }: { calendar: Calendar }) {
       const { data: participant } = await supabase.from('participants').insert({ calendar_id: calendar.id, name: 'Host', color_hue: hue }).select().single()
       if (participant) {
         await supabase.from('calendars').update({ host_participant_id: participant.id }).eq('id', calendar.id)
-        localStorage.setItem(`flock_${calendar.code}`, JSON.stringify({ participantId: participant.id, calendarId: calendar.id }))
+        localStorage.setItem(`synkra_${calendar.code}`, JSON.stringify({ participantId: participant.id, calendarId: calendar.id }))
       }
     }
     registerHost()
@@ -54,7 +54,7 @@ export default function ShareClient({ calendar }: { calendar: Calendar }) {
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="M10 4L6 8l4 4"/>
           </svg>
-          flock
+          synkra
         </a>
         <ThemeToggle />
       </nav>

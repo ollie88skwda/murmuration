@@ -53,7 +53,7 @@ function Gate({ onUnlock }: { onUnlock: () => void }) {
         textAlign: 'center',
       }}>
         <div style={{ color: '#4ade80', fontSize: 13, letterSpacing: '0.15em', marginBottom: 8 }}>
-          FLOCK DEBUG PANEL
+          SYNKRA DEBUG PANEL
         </div>
         <div style={{ color: '#555', fontSize: 12, marginBottom: 28 }}>enter access code</div>
         <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -429,7 +429,7 @@ export default function DebugPage() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem' }}>
         <div>
           <div style={{ color: '#4ade80', fontSize: 16, letterSpacing: '0.15em', fontWeight: 700 }}>
-            FLOCK // DEBUG PANEL
+            SYNKRA // DEBUG PANEL
           </div>
           <div style={{ color: '#444', fontSize: 11, marginTop: 4 }}>
             admin interface — dev use only

@@ -21,7 +21,7 @@ export default function JoinClient({ calendar }: { calendar: Calendar }) {
   const [checkingStorage, setCheckingStorage] = useState(true)
 
   useEffect(() => {
-    const stored = localStorage.getItem(`flock_${calendar.code}`)
+    const stored = localStorage.getItem(`synkra_${calendar.code}`)
     if (stored) {
       saveToHistory(calendar.code, calendar.name)
       router.replace(`/calendar/${calendar.code}`)
@@ -47,7 +47,7 @@ export default function JoinClient({ calendar }: { calendar: Calendar }) {
     try {
       const { data: existing } = await supabase.from('participants').select('*').eq('calendar_id', calendar.id).ilike('name', trimmedName).single()
       if (existing) {
-        localStorage.setItem(`flock_${calendar.code}`, JSON.stringify({ participantId: existing.id, calendarId: calendar.id }))
+        localStorage.setItem(`synkra_${calendar.code}`, JSON.stringify({ participantId: existing.id, calendarId: calendar.id }))
         saveToHistory(calendar.code, calendar.name)
         router.push(`/calendar/${calendar.code}`)
         return
@@ -56,7 +56,7 @@ export default function JoinClient({ calendar }: { calendar: Calendar }) {
       const hue = hueForIndex(allParticipants?.length ?? 0)
       const { data: participant, error: err } = await supabase.from('participants').insert({ calendar_id: calendar.id, name: trimmedName, color_hue: hue }).select().single()
       if (err) throw err
-      localStorage.setItem(`flock_${calendar.code}`, JSON.stringify({ participantId: participant.id, calendarId: calendar.id }))
+      localStorage.setItem(`synkra_${calendar.code}`, JSON.stringify({ participantId: participant.id, calendarId: calendar.id }))
       saveToHistory(calendar.code, calendar.name)
       router.push(`/calendar/${calendar.code}`)
     } catch (err: unknown) {
@@ -75,7 +75,7 @@ export default function JoinClient({ calendar }: { calendar: Calendar }) {
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="M10 4L6 8l4 4"/>
           </svg>
-          flock
+          synkra
         </a>
         <ThemeToggle />
       </nav>

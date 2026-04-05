@@ -10,14 +10,19 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 const jakarta = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-jakarta' })
 
 export const metadata: Metadata = {
-  title: 'Flock — Group Availability Planner',
-  description: 'Find a time that works for everyone. No accounts, no drama.',
+  title: 'Synkra — Group Availability Planner',
+  description: 'Blend your schedules. Find a time that works for everyone. No accounts, no drama.',
 }
 
 const themeScript = `
 (function() {
   try {
-    var t = localStorage.getItem('flock_theme');
+    // Migrate legacy flock_ keys
+    var legacy = localStorage.getItem('flock_theme');
+    if (legacy) { localStorage.setItem('synkra_theme', legacy); localStorage.removeItem('flock_theme'); }
+    var legacyHistory = localStorage.getItem('flock_history');
+    if (legacyHistory) { localStorage.setItem('synkra_history', legacyHistory); localStorage.removeItem('flock_history'); }
+    var t = localStorage.getItem('synkra_theme');
     var html = document.documentElement;
     if (t === 'dark') { html.classList.add('dark'); }
     else if (t === 'light') { html.classList.add('light'); }

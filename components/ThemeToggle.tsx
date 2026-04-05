@@ -6,7 +6,7 @@ export default function ThemeToggle() {
   const [isDark, setIsDark] = useState(false)
 
   useEffect(() => {
-    const stored = localStorage.getItem('flock_theme')
+    const stored = localStorage.getItem('synkra_theme')
     if (stored === 'dark') {
       setIsDark(true)
     } else if (stored === 'light') {
@@ -23,11 +23,11 @@ export default function ThemeToggle() {
     if (next) {
       html.classList.add('dark')
       html.classList.remove('light')
-      localStorage.setItem('flock_theme', 'dark')
+      localStorage.setItem('synkra_theme', 'dark')
     } else {
       html.classList.add('light')
       html.classList.remove('dark')
-      localStorage.setItem('flock_theme', 'light')
+      localStorage.setItem('synkra_theme', 'light')
     }
   }
 

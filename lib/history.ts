@@ -4,7 +4,7 @@ export interface HistoryEntry {
   visitedAt: string
 }
 
-const HISTORY_KEY = 'flock_history'
+const HISTORY_KEY = 'synkra_history'
 const MAX_ENTRIES = 10
 
 export function saveToHistory(code: string, name: string): void {

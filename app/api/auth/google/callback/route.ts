@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = request.nextUrl
   const code = searchParams.get('code')
-  const state = searchParams.get('state') ?? '' // flock calendar code
+  const state = searchParams.get('state') ?? '' // synkra calendar code
   const error = searchParams.get('error')
 
   if (error || !code) {

@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     scope: 'https://www.googleapis.com/auth/calendar.readonly',
     access_type: 'online',
     prompt: 'consent',
-    state: code, // pass flock calendar code through so callback knows where to redirect
+    state: code, // pass synkra calendar code through so callback knows where to redirect
   })
 
   return Response.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`)

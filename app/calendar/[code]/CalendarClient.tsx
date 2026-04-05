@@ -10,7 +10,7 @@ import { getTimeSlots, getDateRange, formatTime, formatDate, addThirtyMin, timeT
 import ThemeToggle from '@/components/ThemeToggle'
 import ChatPanel from '@/components/ChatPanel'
 
-const GCAL_TOKEN_KEY = 'flock_gcal_token'
+const GCAL_TOKEN_KEY = 'synkra_gcal_token'
 
 interface GCalToken {
   accessToken: string
@@ -199,7 +199,7 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
   const maxDayOffset = Math.max(0, allDates.length - 1)
 
   useEffect(() => {
-    const stored = localStorage.getItem(`flock_${cal.code}`)
+    const stored = localStorage.getItem(`synkra_${cal.code}`) ?? localStorage.getItem(`flock_${cal.code}`)
     if (!stored) { router.replace(`/join/${cal.code}`); return }
     const { participantId } = JSON.parse(stored)
     setMyParticipantId(participantId)
@@ -1040,7 +1040,7 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
                 <path d="M6.5 11c0-1.4 1.1-2.5 2.5-2.5s2.5 1.1 2.5 2.5" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
               </svg>
             </div>
-            <span className="font-black text-base tracking-tight hidden sm:block" style={{ color: 'var(--primary)', fontFamily: 'var(--font-jakarta)' }}>flock</span>
+            <span className="font-black text-base tracking-tight hidden sm:block" style={{ color: 'var(--primary)', fontFamily: 'var(--font-jakarta)' }}>synkra</span>
           </a>
           <span className="hidden sm:block flex-shrink-0" style={{ color: 'var(--border)', fontSize: 16, lineHeight: 1 }}>·</span>
           <h1 className="font-semibold text-sm truncate hidden sm:block" style={{ color: 'var(--ink)' }}>{cal.name}</h1>

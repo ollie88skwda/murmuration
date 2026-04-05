@@ -98,7 +98,7 @@ export default function CreatePage() {
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="M10 4L6 8l4 4"/>
           </svg>
-          Back to flock
+          Back to synkra
         </a>
         <ThemeToggle />
       </nav>

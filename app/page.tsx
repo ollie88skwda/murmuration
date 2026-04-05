@@ -194,7 +194,7 @@ function Logo() {
         </svg>
       </div>
       <span className="text-lg font-bold tracking-tight" style={{ color: 'var(--ink)', fontFamily: 'var(--font-jakarta)' }}>
-        flock
+        synkra
       </span>
     </a>
   )
