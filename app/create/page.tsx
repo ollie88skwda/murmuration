@@ -11,9 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 function generateCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  let code = ''
-  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)]
-  return code
+  const bytes = new Uint8Array(6)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes).map(b => chars[b % chars.length]).join('')
 }
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -56,8 +56,11 @@ export default function CreatePage() {
     setLoading(true)
     try {
       let code = generateCode()
-      const { data: existing } = await supabase.from('calendars').select('code').eq('code', code).single()
-      if (existing) code = generateCode()
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const { data: collision } = await supabase.from('calendars').select('code').eq('code', code).maybeSingle()
+        if (!collision) break
+        code = generateCode()
+      }
       const effectiveEnd = isInfinite ? startDate : endDate
       const expiresAt = new Date(effectiveEnd)
       expiresAt.setFullYear(expiresAt.getFullYear() + (isInfinite ? 10 : 0))

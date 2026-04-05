@@ -6,6 +6,8 @@ export default async function CalendarPage({ params, searchParams }: { params: P
   const { code } = await params
   const resolvedSearchParams = await searchParams
 
+  if (!/^[A-Z0-9]{6}$/i.test(code)) notFound()
+
   const { data: calendar } = await supabase
     .from('calendars')
     .select('*')

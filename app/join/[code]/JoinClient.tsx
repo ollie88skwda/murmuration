@@ -44,7 +44,7 @@ export default function JoinClient({ calendar }: { calendar: Calendar }) {
     if (!trimmedName) return
     setLoading(true)
     try {
-      const { data: existing } = await supabase.from('participants').select('*').eq('calendar_id', calendar.id).ilike('name', trimmedName).single()
+      const { data: existing } = await supabase.from('participants').select('*').eq('calendar_id', calendar.id).eq('name', trimmedName).maybeSingle()
       if (existing) {
         localStorage.setItem(`synkra_${calendar.code}`, JSON.stringify({ participantId: existing.id, calendarId: calendar.id }))
         saveToHistory(calendar.code, calendar.name)

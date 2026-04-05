@@ -11,11 +11,12 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = request.nextUrl
   const code = searchParams.get('code')
-  const state = searchParams.get('state') ?? '' // synkra calendar code
+  const rawState = searchParams.get('state') ?? ''
+  // Validate state is a well-formed calendar code before using it in a redirect
+  const state = /^[A-Z0-9]{6}$/i.test(rawState) ? rawState.toUpperCase() : ''
   const error = searchParams.get('error')
 
   if (error || !code) {
-    // Redirect back to calendar with error
     const dest = state ? `/calendar/${state}?gcal=error` : '/'
     return Response.redirect(`${appUrl}${dest}`)
   }

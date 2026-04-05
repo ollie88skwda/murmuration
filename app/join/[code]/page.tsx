@@ -5,9 +5,8 @@ import JoinClient from './JoinClient'
 export default async function JoinPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = await params
 
-  if (code.toUpperCase() === 'DEBUG') {
-    redirect('/debug')
-  }
+  if (code.toUpperCase() === 'DEBUG') redirect('/debug')
+  if (!/^[A-Z0-9]{6}$/i.test(code)) notFound()
 
   const { data: calendar } = await supabase
     .from('calendars')
