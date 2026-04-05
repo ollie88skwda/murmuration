@@ -64,6 +64,7 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
   const [legendOpen, setLegendOpen] = useState(false)
   const [showHint, setShowHint] = useState(true)
   const [contextMenu, setContextMenu] = useState<{ blockId: string; x: number; y: number } | null>(null)
+  const [dayContextMenu, setDayContextMenu] = useState<{ dateStr: string; x: number; y: number } | null>(null)
   const [editingLabel, setEditingLabel] = useState<{ blockId: string; value: string } | null>(null)
   const [dragging, setDragging] = useState<DragState | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -341,6 +342,48 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
     setBlocks(prev => prev.filter(b => b.id !== blockId))
     setContextMenu(null)
     await supabase.from('blocks').delete().eq('id', blockId)
+  }
+
+  // ── Day header context menu ───────────────────────────────────────────────
+
+  function handleDayHeaderContextMenu(dateStr: string, e: React.MouseEvent) {
+    if (cal.is_locked || !myParticipantId || !isActiveDate(dateStr)) return
+    e.preventDefault(); e.stopPropagation()
+    setDayContextMenu({ dateStr, x: e.clientX, y: e.clientY })
+  }
+
+  function handleDayHeaderTouchStart(dateStr: string, e: React.TouchEvent) {
+    if (cal.is_locked || !myParticipantId || !isActiveDate(dateStr)) return
+    longPressTimer.current = setTimeout(() => {
+      const touch = e.touches[0]
+      setDayContextMenu({ dateStr, x: touch.clientX, y: touch.clientY })
+    }, 500)
+  }
+
+  async function blockEntireDay(dateStr: string) {
+    if (!myParticipantId || !myParticipant) return
+    setDayContextMenu(null)
+    const startTime = cal.day_start_time
+    const endTime = cal.day_end_time
+    const existing = blocks.filter(b => b.participant_id === myParticipantId && b.date === dateStr)
+    const existingIds = existing.map(b => b.id)
+    setBlocks(prev => prev.filter(b => !existingIds.includes(b.id)))
+    const newBlock = { participant_id: myParticipantId, calendar_id: cal.id, date: dateStr, start_time: startTime, end_time: endTime, tier: 3 as const }
+    const tempId = `temp_day_${Date.now()}`
+    setBlocks(prev => [...prev, { ...newBlock, id: tempId, created_at: '', updated_at: '' }])
+    if (existingIds.length > 0) await supabase.from('blocks').delete().in('id', existingIds)
+    const { data } = await supabase.from('blocks').insert(newBlock).select().single()
+    if (data) setBlocks(prev => prev.map(b => b.id === tempId ? data : b))
+  }
+
+  async function clearEntireDay(dateStr: string) {
+    if (!myParticipantId) return
+    setDayContextMenu(null)
+    const existing = blocks.filter(b => b.participant_id === myParticipantId && b.date === dateStr)
+    const existingIds = existing.map(b => b.id)
+    if (existingIds.length === 0) return
+    setBlocks(prev => prev.filter(b => !existingIds.includes(b.id)))
+    await supabase.from('blocks').delete().in('id', existingIds)
   }
 
   function openLabelEditor(blockId: string) {
@@ -785,13 +828,17 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
               return (
                 <div
                   key={dateStr}
-                  className="text-center py-2.5 border-r"
+                  className="text-center py-2.5 border-r select-none"
                   style={{
                     ...(fillWidth ? { flex: 1, minWidth: 0 } : { width: COL_WIDTH, flexShrink: 0 }),
                     borderColor: 'var(--border)',
                     background: !active ? 'var(--bg)' : weekend ? 'var(--primary-light)' : 'var(--bg-card)',
                     opacity: active ? 1 : 0.4,
+                    cursor: active && myParticipantId && !cal.is_locked ? 'context-menu' : 'default',
                   }}
+                  onContextMenu={e => handleDayHeaderContextMenu(dateStr, e)}
+                  onTouchStart={e => handleDayHeaderTouchStart(dateStr, e)}
+                  onTouchEnd={handleBlockTouchEnd}
                 >
                   <span className="text-xs font-bold uppercase tracking-wider" style={{ color: weekend ? 'var(--primary)' : 'var(--ink-2)' }}>
                     {fillWidth && view === 'day' ? day : short}
@@ -894,7 +941,7 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
       style={{ background: 'var(--bg)' }}
       onMouseUp={handleMouseUp}
       onTouchEnd={handleRootTouchEnd}
-      onClick={() => setContextMenu(null)}
+      onClick={() => { setContextMenu(null); setDayContextMenu(null) }}
     >
       {/* Header */}
       <header
@@ -1387,6 +1434,47 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
               </svg>
               Delete block
             </button>
+          </div>
+        </>
+      )}
+
+      {/* Day header context menu */}
+      {dayContextMenu && (
+        <>
+          <div className="fixed inset-0 z-50" onClick={() => setDayContextMenu(null)} />
+          <div
+            className="fixed z-50 rounded-2xl py-1.5 min-w-[200px] overflow-hidden"
+            style={{ left: dayContextMenu.x, top: dayContextMenu.y, background: 'var(--bg-card)', boxShadow: '0 8px 32px rgba(0,0,0,0.18)', border: '1px solid var(--border)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <p className="px-4 pt-1.5 pb-1 text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--ink-3)' }}>
+              {new Date(dayContextMenu.dateStr + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+            </p>
+            <button
+              onClick={() => blockEntireDay(dayContextMenu.dateStr)}
+              className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-2.5 transition-colors"
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--ink-2)', flexShrink: 0 }}>
+                <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 15h8M8 19h5"/>
+              </svg>
+              <span style={{ color: 'var(--ink)' }}>Block entire day</span>
+            </button>
+            {blocks.some(b => b.participant_id === myParticipantId && b.date === dayContextMenu.dateStr) && (
+              <button
+                onClick={() => clearEntireDay(dayContextMenu.dateStr)}
+                className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-2.5 transition-colors"
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(239,68,68,0.08)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                style={{ color: '#EF4444' }}
+              >
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                  <path d="M2 3.5h9M4.5 3.5V2h4v1.5M5 6v4M8 6v4M3 3.5l.5 7h6l.5-7"/>
+                </svg>
+                Clear entire day
+              </button>
+            )}
           </div>
         </>
       )}
