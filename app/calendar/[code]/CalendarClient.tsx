@@ -79,10 +79,16 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
   const [editingTime, setEditingTime] = useState<{ blockId: string; startTime: string; endTime: string } | null>(null)
   const [editingName, setEditingName] = useState(false)
   const [nameInput, setNameInput] = useState('')
+  const [editingNameTarget, setEditingNameTarget] = useState<string | null>(null)
   // Feature 1: view mode + offset
   const [view, setView] = useState<ViewMode>('all')
   const [viewOffset, setViewOffset] = useState(0)
+  // Hide blocked-out days toggle per tab
+  const [hideBlockedDays, setHideBlockedDays] = useState<Record<ViewMode, boolean>>({ all: false, month: false, week: false, day: false })
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Undo/redo stacks: each entry = { created: blocks added, removed: blocks that were merged away }
+  const undoStack = useRef<Array<{ created: Block[]; removed: Block[] }>>([])
+  const redoStack = useRef<Array<{ created: Block[]; removed: Block[] }>>([])
   // Google Calendar integration
   const [gcalToken, setGcalToken] = useState<GCalToken | null>(null)
   const [gcalImporting, setGcalImporting] = useState(false)
@@ -189,20 +195,34 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
     return { val, label }
   })
 
+  // Blocked-out dates: days where every visible participant has at least one block
+  const blockedOutDates = useMemo(() => {
+    const visible = participants.filter(p => !hiddenIds.has(p.id))
+    if (visible.length === 0) return new Set<string>()
+    return new Set(
+      allDatesRaw.filter(date =>
+        visible.every(p => blocks.some(b => b.participant_id === p.id && b.date === date))
+      )
+    )
+  }, [participants, hiddenIds, blocks, allDatesRaw])
+
   // Feature 1: Compute visible dates for the current view
   // week/all use allDatesRaw so non-selected days appear grayed rather than hidden
   const visibleDates = (() => {
-    if (view === 'all') return allDatesRaw
-    if (view === 'day') {
+    let dates: string[]
+    if (view === 'all') dates = allDatesRaw
+    else if (view === 'day') {
       const idx = Math.max(0, Math.min(viewOffset, allDates.length - 1))
-      return allDates.slice(idx, idx + 1)
-    }
-    if (view === 'week') {
+      dates = allDates.slice(idx, idx + 1)
+    } else if (view === 'week') {
       const start = viewOffset * 7
-      return allDatesRaw.slice(start, start + 7)
+      dates = allDatesRaw.slice(start, start + 7)
+    } else {
+      // month: all dates (month view renders its own grid)
+      dates = allDatesRaw
     }
-    // month: all dates (month view renders its own grid)
-    return allDatesRaw
+    if (hideBlockedDays[view]) dates = dates.filter(d => !blockedOutDates.has(d))
+    return dates
   })()
 
   const maxWeekOffset = Math.max(0, Math.ceil(allDatesRaw.length / 7) - 1)
@@ -333,7 +353,11 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
     setBlocks(prev => [...prev, { ...newBlock, id: tempId, created_at: '', updated_at: '' }])
     if (overlapIds.length > 0) await supabase.from('blocks').delete().in('id', overlapIds)
     const { data } = await supabase.from('blocks').insert(newBlock).select().single()
-    if (data) setBlocks(prev => prev.map(b => b.id === tempId ? data : b))
+    if (data) {
+      setBlocks(prev => prev.map(b => b.id === tempId ? data : b))
+      redoStack.current = []
+      undoStack.current = undoStack.current.slice(-19).concat({ created: [data as Block], removed: overlapping })
+    }
   }, [myParticipantId, myParticipant, visibleDates, slots, blocks, cal.id])
 
   function handleCellMouseDown(dateIdx: number, slotIdx: number, e: React.MouseEvent) {
@@ -426,6 +450,62 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
     await supabase.from('blocks').delete().eq('id', blockId)
   }
 
+  const performUndo = useCallback(async () => {
+    if (undoStack.current.length === 0) return
+    const action = undoStack.current.pop()!
+    // Optimistically remove created blocks from local state
+    setBlocks(prev => prev.filter(b => !action.created.some(c => c.id === b.id)))
+    // Re-insert removed/merged blocks
+    const reinserted: Block[] = []
+    for (const b of action.removed) {
+      const { data } = await supabase.from('blocks').insert({
+        participant_id: b.participant_id, calendar_id: b.calendar_id,
+        date: b.date, start_time: b.start_time, end_time: b.end_time,
+        tier: b.tier, label: b.label ?? null,
+      }).select().single()
+      if (data) { reinserted.push(data as Block); setBlocks(prev => [...prev, data as Block]) }
+    }
+    // Delete created blocks from DB
+    const realIds = action.created.map(b => b.id).filter(id => !id.startsWith('temp_'))
+    if (realIds.length > 0) await supabase.from('blocks').delete().in('id', realIds)
+    // Push inverse to redo stack
+    redoStack.current.push({ created: reinserted, removed: action.created.filter(b => !b.id.startsWith('temp_')) })
+  }, [])
+
+  const performRedo = useCallback(async () => {
+    if (redoStack.current.length === 0) return
+    const action = redoStack.current.pop()!
+    setBlocks(prev => prev.filter(b => !action.created.some(c => c.id === b.id)))
+    const reinserted: Block[] = []
+    for (const b of action.removed) {
+      const { data } = await supabase.from('blocks').insert({
+        participant_id: b.participant_id, calendar_id: b.calendar_id,
+        date: b.date, start_time: b.start_time, end_time: b.end_time,
+        tier: b.tier, label: b.label ?? null,
+      }).select().single()
+      if (data) { reinserted.push(data as Block); setBlocks(prev => [...prev, data as Block]) }
+    }
+    const realIds = action.created.map(b => b.id).filter(id => !id.startsWith('temp_'))
+    if (realIds.length > 0) await supabase.from('blocks').delete().in('id', realIds)
+    undoStack.current.push({ created: reinserted, removed: action.created.filter(b => !b.id.startsWith('temp_')) })
+  }, [])
+
+  // Undo / redo keyboard shortcuts — declared after performUndo/performRedo to avoid TDZ
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (!myParticipantId) return
+      const tag = (document.activeElement as HTMLElement)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault(); performUndo()
+      } else if ((e.ctrlKey || e.metaKey) && (e.key === 'Z' || (e.key === 'z' && e.shiftKey))) {
+        e.preventDefault(); performRedo()
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [myParticipantId, performUndo, performRedo])
+
   // ── Day header: right-click / long-press to block entire day ────────────
 
   function handleDayHeaderContextMenu(dateStr: string, e: React.MouseEvent) {
@@ -451,7 +531,11 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
     setBlocks(prev => [...prev, { ...newBlock, id: tempId, created_at: '', updated_at: '' }])
     if (existingIds.length > 0) await supabase.from('blocks').delete().in('id', existingIds)
     const { data } = await supabase.from('blocks').insert(newBlock).select().single()
-    if (data) setBlocks(prev => prev.map(b => b.id === tempId ? data : b))
+    if (data) {
+      setBlocks(prev => prev.map(b => b.id === tempId ? data : b))
+      redoStack.current = []
+      undoStack.current = undoStack.current.slice(-19).concat({ created: [data as Block], removed: existing })
+    }
   }
 
   function openLabelEditor(blockId: string) {
@@ -494,11 +578,13 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
   }
 
   async function saveParticipantName() {
-    if (!myParticipantId || !nameInput.trim()) return
+    const targetId = editingNameTarget ?? myParticipantId
+    if (!targetId || !nameInput.trim()) return
     const trimmed = nameInput.trim()
-    setParticipants(prev => prev.map(p => p.id === myParticipantId ? { ...p, name: trimmed } : p))
+    setParticipants(prev => prev.map(p => p.id === targetId ? { ...p, name: trimmed } : p))
     setEditingName(false)
-    await supabase.from('participants').update({ name: trimmed }).eq('id', myParticipantId)
+    setEditingNameTarget(null)
+    await supabase.from('participants').update({ name: trimmed }).eq('id', targetId)
   }
 
   async function saveLabel(overrideValue?: string) {
@@ -710,8 +796,8 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
             pointerEvents: 'auto',
           }}
           onClick={e => isOwn ? handleBlockClick(block, e) : undefined}
-          onContextMenu={e => isOwn ? handleBlockContextMenu(block.id, e) : e.preventDefault()}
-          onTouchStart={e => isOwn ? handleBlockTouchStart(block.id, e) : undefined}
+          onContextMenu={e => (isOwn || isHost) ? handleBlockContextMenu(block.id, e) : e.preventDefault()}
+          onTouchStart={e => (isOwn || isHost) ? handleBlockTouchStart(block.id, e) : undefined}
           onTouchEnd={handleBlockTouchEnd}
         >
           {/* Participant name — tiny, uppercase, slightly transparent */}
@@ -839,43 +925,46 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
           <div key={wi} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3, marginBottom: 3 }}>
             {week.map(dateStr => {
               const inRange = allDateSet.has(dateStr)
+              const isBlocked = inRange && blockedOutDates.has(dateStr)
+              const hiddenByFilter = hideBlockedDays.month && isBlocked
+              const effectiveInRange = inRange && !hiddenByFilter
               const d = new Date(dateStr + 'T00:00:00')
               const dayNum = d.getDate()
               const isToday = dateStr === new Date().toISOString().slice(0, 10)
-              const activeParts = inRange ? getDayParticipants(dateStr) : []
-              const allBusy = inRange && participants.length > 0 && activeParts.length === participants.length
+              const activeParts = effectiveInRange ? getDayParticipants(dateStr) : []
+              const allBusy = effectiveInRange && participants.length > 0 && activeParts.length === participants.length
 
               return (
                 <div
                   key={dateStr}
                   onClick={() => {
-                    if (!inRange) return
+                    if (!effectiveInRange) return
                     const idx = allDates.indexOf(dateStr)
                     setViewOffset(idx)
                     setView('day')
                   }}
-                  onMouseEnter={e => { if (inRange) (e.currentTarget as HTMLElement).style.borderColor = 'var(--primary)' }}
-                  onMouseLeave={e => { if (inRange) (e.currentTarget as HTMLElement).style.borderColor = allBusy ? 'var(--primary)' : isToday ? 'var(--primary)' : 'var(--border)' }}
+                  onMouseEnter={e => { if (effectiveInRange) (e.currentTarget as HTMLElement).style.borderColor = 'var(--primary)' }}
+                  onMouseLeave={e => { if (effectiveInRange) (e.currentTarget as HTMLElement).style.borderColor = allBusy ? 'var(--primary)' : isToday ? 'var(--primary)' : 'var(--border)' }}
                   style={{
                     minHeight: 90,
                     borderRadius: 12,
-                    border: `1.5px solid ${!inRange ? 'transparent' : allBusy || isToday ? 'var(--primary)' : 'var(--border)'}`,
-                    background: !inRange ? 'transparent' : isToday ? 'var(--primary-light)' : 'var(--bg-card)',
+                    border: `1.5px solid ${!effectiveInRange ? 'transparent' : allBusy || isToday ? 'var(--primary)' : 'var(--border)'}`,
+                    background: !effectiveInRange ? 'transparent' : isToday ? 'var(--primary-light)' : 'var(--bg-card)',
                     padding: '8px 10px',
-                    cursor: inRange ? 'pointer' : 'default',
-                    opacity: inRange ? 1 : 0.2,
+                    cursor: effectiveInRange ? 'pointer' : 'default',
+                    opacity: effectiveInRange ? 1 : 0.2,
                     transition: 'border-color 0.15s',
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <span style={{ fontSize: 14, fontWeight: inRange ? 700 : 400, color: isToday ? 'var(--primary)' : inRange ? 'var(--ink)' : 'var(--ink-3)' }}>
+                    <span style={{ fontSize: 14, fontWeight: effectiveInRange ? 700 : 400, color: isToday ? 'var(--primary)' : effectiveInRange ? 'var(--ink)' : 'var(--ink-3)' }}>
                       {dayNum}
                     </span>
-                    {allBusy && inRange && (
+                    {allBusy && effectiveInRange && (
                       <span style={{ fontSize: 8, fontWeight: 800, color: 'var(--primary)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>ALL</span>
                     )}
                   </div>
-                  {inRange && activeParts.length > 0 && (
+                  {effectiveInRange && activeParts.length > 0 && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
                       {activeParts.map(p => (
                         <div
@@ -1201,8 +1290,30 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
             </button>
           ))}
         </div>
-        {/* Right: edit mode toggle */}
-        <div className="flex items-center justify-end w-32">
+        {/* Right: hide-blocked toggle + edit mode toggle */}
+        <div className="flex items-center justify-end gap-1.5 w-32">
+          <button
+            onClick={() => setHideBlockedDays(prev => ({ ...prev, [view]: !prev[view] }))}
+            className="flex items-center justify-center w-9 h-9 rounded-lg border transition-all"
+            title={hideBlockedDays[view] ? 'Show all days' : 'Hide fully-blocked days'}
+            style={{
+              background: hideBlockedDays[view] ? 'var(--primary)' : 'var(--bg-card)',
+              borderColor: hideBlockedDays[view] ? 'var(--primary)' : 'var(--border)',
+              color: hideBlockedDays[view] ? 'white' : 'var(--ink-2)',
+            }}
+          >
+            {hideBlockedDays[view] ? (
+              <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                <line x1="1" y1="1" x2="23" y2="23"/>
+              </svg>
+            ) : (
+              <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            )}
+          </button>
           {myParticipantId && (
             <button
               onClick={() => setEditMode(o => !o)}
@@ -1429,13 +1540,13 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
                         {p.is_submitted ? '✓' : '…'}
                       </span>
                     </button>
-                    {isMe && (
+                    {(isMe || isHost) && (
                       <button
-                        onClick={() => { setNameInput(p.name); setEditingName(true) }}
+                        onClick={() => { setNameInput(p.name); setEditingNameTarget(p.id); setEditingName(true) }}
                         className="p-1.5 rounded-lg flex-shrink-0 transition-colors"
                         onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg)')}
                         onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                        title="Edit your name"
+                        title={isMe ? 'Edit your name' : `Rename ${p.name}`}
                         style={{ color: 'var(--ink-3)' }}
                       >
                         <svg width="11" height="11" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -1621,65 +1732,76 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
       )}
 
       {/* Context menu */}
-      {contextMenu && (
-        <>
-          <div className="fixed inset-0 z-50" onClick={() => setContextMenu(null)} />
-          <div
-            className="fixed z-50 rounded-2xl py-1.5 min-w-[180px] overflow-hidden"
-            style={{ left: contextMenu.x, top: contextMenu.y, background: 'var(--bg-card)', boxShadow: '0 8px 32px rgba(0,0,0,0.18)', border: '1px solid var(--border)' }}
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Label */}
-            <button onClick={() => openLabelEditor(contextMenu.blockId)}
-              className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-2.5 transition-colors"
-              onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--ink-2)', flexShrink: 0 }}>
-                <path d="M1 9.5V12h2.5L11 4.5 8.5 2 1 9.5z"/>
-              </svg>
-              <span style={{ color: 'var(--ink)' }}>
-                {blocks.find(b => b.id === contextMenu.blockId)?.label ? 'Edit label' : 'Add label'}
-              </span>
-            </button>
-            {/* Edit time */}
-            <button onClick={() => openTimeEditor(contextMenu.blockId)}
-              className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-2.5 transition-colors"
-              onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--ink-2)', flexShrink: 0 }}>
-                <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
-              </svg>
-              <span style={{ color: 'var(--ink)' }}>Edit time</span>
-            </button>
-            <div className="my-1 border-t" style={{ borderColor: 'var(--border)' }} />
-            {/* Tiers */}
-            <p className="px-4 pt-1 pb-0.5 text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--ink-3)' }}>Busy level</p>
-            {([1, 2, 3] as const).map(tier => (
-              <button key={tier} onClick={() => setBlockTier(contextMenu.blockId, tier)}
-                className="w-full text-left px-4 py-2 text-sm flex items-center gap-2.5 transition-colors"
-                onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: tierColor(myParticipant?.color_hue ?? 240, tier) }} />
-                <span style={{ color: 'var(--ink)' }}>{TIER_LABELS[tier]}</span>
-                {blocks.find(b => b.id === contextMenu.blockId)?.tier === tier && (
-                  <svg className="ml-auto" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="var(--primary)" strokeWidth="2.5" strokeLinecap="round"><path d="M2 6l3 3 5-5"/></svg>
-                )}
+      {contextMenu && (() => {
+        const ctxBlock = blocks.find(b => b.id === contextMenu.blockId)
+        const ctxIsOwn = ctxBlock?.participant_id === myParticipantId
+        // Smart positioning: keep menu inside viewport
+        const menuW = 200, menuH = 340
+        const left = Math.min(contextMenu.x, (typeof window !== 'undefined' ? window.innerWidth : 800) - menuW - 8)
+        const top = Math.min(contextMenu.y, (typeof window !== 'undefined' ? window.innerHeight : 600) - menuH - 8)
+        return (
+          <>
+            <div className="fixed inset-0 z-50" onClick={() => setContextMenu(null)} />
+            <div
+              className="fixed z-50 rounded-2xl py-1.5 min-w-[190px]"
+              style={{
+                left: Math.max(8, left), top: Math.max(8, top),
+                maxHeight: 'min(80dvh, 360px)', overflowY: 'auto',
+                background: 'var(--bg-card)', boxShadow: '0 8px 32px rgba(0,0,0,0.18)', border: '1px solid var(--border)',
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Own-block controls */}
+              {ctxIsOwn && (<>
+                <button onClick={() => openLabelEditor(contextMenu.blockId)}
+                  className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-2.5 transition-colors"
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--ink-2)', flexShrink: 0 }}>
+                    <path d="M1 9.5V12h2.5L11 4.5 8.5 2 1 9.5z"/>
+                  </svg>
+                  <span style={{ color: 'var(--ink)' }}>{ctxBlock?.label ? 'Edit label' : 'Add label'}</span>
+                </button>
+                <button onClick={() => openTimeEditor(contextMenu.blockId)}
+                  className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-2.5 transition-colors"
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--ink-2)', flexShrink: 0 }}>
+                    <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+                  </svg>
+                  <span style={{ color: 'var(--ink)' }}>Edit time</span>
+                </button>
+                <div className="my-1 border-t" style={{ borderColor: 'var(--border)' }} />
+                <p className="px-4 pt-1 pb-0.5 text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--ink-3)' }}>Busy level</p>
+                {([1, 2, 3] as const).map(tier => (
+                  <button key={tier} onClick={() => setBlockTier(contextMenu.blockId, tier)}
+                    className="w-full text-left px-4 py-2 text-sm flex items-center gap-2.5 transition-colors"
+                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                    <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: tierColor(myParticipant?.color_hue ?? 240, tier) }} />
+                    <span style={{ color: 'var(--ink)' }}>{TIER_LABELS[tier]}</span>
+                    {ctxBlock?.tier === tier && (
+                      <svg className="ml-auto" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="var(--primary)" strokeWidth="2.5" strokeLinecap="round"><path d="M2 6l3 3 5-5"/></svg>
+                    )}
+                  </button>
+                ))}
+                <div className="my-1 border-t" style={{ borderColor: 'var(--border)' }} />
+              </>)}
+              {/* Delete — available to block owner OR host */}
+              <button onClick={() => deleteBlock(contextMenu.blockId)}
+                className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-2.5 transition-colors"
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(239,68,68,0.08)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                style={{ color: '#EF4444' }}>
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                  <path d="M2 3.5h9M4.5 3.5V2h4v1.5M5 6v4M8 6v4M3 3.5l.5 7h6l.5-7"/>
+                </svg>
+                Delete block
               </button>
-            ))}
-            <div className="my-1 border-t" style={{ borderColor: 'var(--border)' }} />
-            <button onClick={() => deleteBlock(contextMenu.blockId)}
-              className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-2.5 transition-colors"
-              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(239,68,68,0.08)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-              style={{ color: '#EF4444' }}>
-              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                <path d="M2 3.5h9M4.5 3.5V2h4v1.5M5 6v4M8 6v4M3 3.5l.5 7h6l.5-7"/>
-              </svg>
-              Delete block
-            </button>
-          </div>
-        </>
-      )}
+            </div>
+          </>
+        )
+      })()}
 
       {/* Label editor */}
       {editingLabel && (
@@ -1803,54 +1925,60 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
       )}
 
       {/* Name editor modal */}
-      {editingName && (
-        <>
-          <div className="fixed inset-0 z-50 bg-black/20" onClick={() => setEditingName(false)} />
-          <div
-            className="fixed z-50 rounded-2xl overflow-hidden"
-            style={{
-              left: '50%', top: '50%', transform: 'translate(-50%, -50%)',
-              background: 'var(--bg-card)', boxShadow: '0 16px 48px rgba(0,0,0,0.22)',
-              border: '1px solid var(--border)', width: 280,
-            }}
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="px-4 pt-4 pb-3 border-b" style={{ borderColor: 'var(--border)' }}>
-              <p className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>Edit your name</p>
-            </div>
-            <div className="p-4">
-              <input
-                autoFocus
-                type="text"
-                value={nameInput}
-                onChange={e => setNameInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') saveParticipantName(); if (e.key === 'Escape') setEditingName(false) }}
-                placeholder="Your name"
-                maxLength={40}
-                className="w-full px-3 py-2.5 text-sm rounded-xl focus:outline-none"
-                style={{ background: 'var(--bg)', border: '1.5px solid var(--border)', color: 'var(--ink)' }}
-              />
-              <div className="flex gap-2 mt-3">
-                <button
-                  onClick={saveParticipantName}
-                  disabled={!nameInput.trim()}
-                  className="flex-1 py-2 text-sm font-semibold rounded-xl text-white"
-                  style={{ background: nameInput.trim() ? 'var(--primary)' : 'var(--ink-3)' }}
-                >
-                  Save
-                </button>
-                <button
-                  onClick={() => setEditingName(false)}
-                  className="px-3 py-2 text-sm rounded-xl border"
-                  style={{ borderColor: 'var(--border)', color: 'var(--ink-3)' }}
-                >
-                  Cancel
-                </button>
+      {editingName && (() => {
+        const targetP = participants.find(p => p.id === (editingNameTarget ?? myParticipantId))
+        const isRenamingOther = editingNameTarget && editingNameTarget !== myParticipantId
+        return (
+          <>
+            <div className="fixed inset-0 z-50 bg-black/20" onClick={() => { setEditingName(false); setEditingNameTarget(null) }} />
+            <div
+              className="fixed z-50 rounded-2xl overflow-hidden"
+              style={{
+                left: '50%', top: '50%', transform: 'translate(-50%, -50%)',
+                background: 'var(--bg-card)', boxShadow: '0 16px 48px rgba(0,0,0,0.22)',
+                border: '1px solid var(--border)', width: 280,
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="px-4 pt-4 pb-3 border-b" style={{ borderColor: 'var(--border)' }}>
+                <p className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>
+                  {isRenamingOther ? `Rename ${targetP?.name ?? 'participant'}` : 'Edit your name'}
+                </p>
+              </div>
+              <div className="p-4">
+                <input
+                  autoFocus
+                  type="text"
+                  value={nameInput}
+                  onChange={e => setNameInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') saveParticipantName(); if (e.key === 'Escape') { setEditingName(false); setEditingNameTarget(null) } }}
+                  placeholder={isRenamingOther ? `${targetP?.name ?? 'Name'}` : 'Your name'}
+                  maxLength={40}
+                  className="w-full px-3 py-2.5 text-sm rounded-xl focus:outline-none"
+                  style={{ background: 'var(--bg)', border: '1.5px solid var(--border)', color: 'var(--ink)' }}
+                />
+                <div className="flex gap-2 mt-3">
+                  <button
+                    onClick={saveParticipantName}
+                    disabled={!nameInput.trim()}
+                    className="flex-1 py-2 text-sm font-semibold rounded-xl text-white"
+                    style={{ background: nameInput.trim() ? 'var(--primary)' : 'var(--ink-3)' }}
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={() => { setEditingName(false); setEditingNameTarget(null) }}
+                    className="px-3 py-2 text-sm rounded-xl border"
+                    style={{ borderColor: 'var(--border)', color: 'var(--ink-3)' }}
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        </>
-      )}
+          </>
+        )
+      })()}
     </div>
   )
 }
