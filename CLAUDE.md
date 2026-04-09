@@ -12,7 +12,7 @@ npm run build    # production build (also type-checks)
 npm run lint     # ESLint
 ```
 
-There are no automated tests. Playwright is installed but no test files exist yet.
+Playwright is installed with tests in `tests/issues.spec.ts`. Run with `npx playwright test`.
 
 ## Environment
 
