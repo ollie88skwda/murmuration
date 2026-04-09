@@ -84,6 +84,7 @@ body {
 .grid-scroll::-webkit-scrollbar { height: 6px; width: 6px; }
 .grid-scroll::-webkit-scrollbar-track { background: var(--bg); }
 .grid-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.grid-scroll { -webkit-overflow-scrolling: touch; padding-bottom: env(safe-area-inset-bottom, 0px); }
 
 /* Hero fade-up */
 @keyframes fadeUp {
