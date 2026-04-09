@@ -94,8 +94,16 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
   const [gcalImporting, setGcalImporting] = useState(false)
   const [gcalImportCount, setGcalImportCount] = useState<number | null>(null)
   const [gcalError, setGcalError] = useState<string | null>(null)
+  const [codeCopied, setCodeCopied] = useState(false)
   // Infinite calendar: number of days to show from start_date
   const [infiniteVisibleDays, setInfiniteVisibleDays] = useState(21)
+
+  function copyCode() {
+    navigator.clipboard.writeText(cal.code).then(() => {
+      setCodeCopied(true)
+      setTimeout(() => setCodeCopied(false), 1500)
+    }).catch(() => {})
+  }
 
   // For infinite calendars, compute a rolling end date based on how many days are loaded
   const effectiveEndDate = cal.is_infinite
@@ -489,6 +497,14 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
     if (realIds.length > 0) await supabase.from('blocks').delete().in('id', realIds)
     undoStack.current.push({ created: reinserted, removed: action.created.filter(b => !b.id.startsWith('temp_')) })
   }, [])
+
+  // Dismiss context menu on scroll (especially useful on mobile where popup doesn't follow scroll)
+  useEffect(() => {
+    if (!contextMenu) return
+    function onScroll() { setContextMenu(null) }
+    document.addEventListener('scroll', onScroll, { capture: true, passive: true })
+    return () => document.removeEventListener('scroll', onScroll, { capture: true })
+  }, [contextMenu])
 
   // Undo / redo keyboard shortcuts — declared after performUndo/performRedo to avoid TDZ
   useEffect(() => {
@@ -1134,8 +1150,8 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
 
   return (
     <div
-      className="flex flex-col h-screen overflow-hidden no-select"
-      style={{ background: 'var(--bg)' }}
+      className="flex flex-col overflow-hidden no-select"
+      style={{ background: 'var(--bg)', height: '100dvh' }}
       onMouseUp={handleMouseUp}
       onTouchEnd={handleRootTouchEnd}
       onClick={() => setContextMenu(null)}
@@ -1164,6 +1180,23 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
           </a>
           <span className="hidden sm:block flex-shrink-0" style={{ color: 'var(--border)', fontSize: 16, lineHeight: 1 }}>·</span>
           <h1 className="font-semibold text-sm truncate hidden sm:block" style={{ color: 'var(--ink)' }}>{cal.name}</h1>
+          <button
+            onClick={copyCode}
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-mono font-bold tracking-widest transition-all flex-shrink-0"
+            style={{
+              background: codeCopied ? 'var(--primary)' : 'var(--primary-light)',
+              color: codeCopied ? 'white' : 'var(--primary)',
+              cursor: 'pointer',
+            }}
+            title="Click to copy code"
+          >
+            {codeCopied ? 'Copied!' : cal.code}
+            {!codeCopied && (
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+            )}
+          </button>
           {cal.is_locked && (
             <span className="text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: 'var(--primary-light)', color: 'var(--primary)' }}>
               Locked
@@ -1235,9 +1268,9 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
       )}
 
       {/* View toolbar */}
-      <div className="flex-shrink-0 flex items-center justify-between px-3 sm:px-4 py-2 border-b" style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}>
+      <div className="flex-shrink-0 flex items-center justify-between px-2 sm:px-4 py-1.5 sm:py-2 border-b gap-1" style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}>
         {/* Nav arrows (left) */}
-        <div className="flex items-center gap-1 w-32">
+        <div className="flex items-center gap-0.5 sm:gap-1 min-w-0 flex-1">
           {(view === 'week' || view === 'day') && (
             <>
               <button
@@ -1273,12 +1306,12 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
           )}
         </div>
         {/* View tabs (center) */}
-        <div className="flex items-center rounded-xl overflow-hidden border" style={{ borderColor: 'var(--border)' }}>
+        <div className="flex items-center rounded-xl overflow-hidden border flex-shrink-0" style={{ borderColor: 'var(--border)' }}>
           {(['all', 'month', 'week', 'day'] as ViewMode[]).map((v, i, arr) => (
             <button
               key={v}
               onClick={() => { setView(v); setViewOffset(0) }}
-              className="text-xs font-semibold px-3 py-2.5 transition-all min-h-[44px]"
+              className="text-xs font-semibold px-2 sm:px-3 py-2 sm:py-2.5 transition-all min-h-[40px] sm:min-h-[44px]"
               style={{
                 background: view === v ? 'var(--primary)' : 'var(--bg-card)',
                 color: view === v ? 'white' : 'var(--ink-2)',
@@ -1291,7 +1324,7 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
           ))}
         </div>
         {/* Right: hide-blocked toggle + edit mode toggle */}
-        <div className="flex items-center justify-end gap-1.5 w-32">
+        <div className="flex items-center justify-end gap-1 sm:gap-1.5 flex-1">
           <button
             onClick={() => setHideBlockedDays(prev => ({ ...prev, [view]: !prev[view] }))}
             className="flex items-center justify-center w-9 h-9 rounded-lg border transition-all"
@@ -1511,6 +1544,27 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
           {/* People tab */}
           {sidebarTab === 'people' && (<>
           <div className="overflow-y-auto flex-1">
+          {/* Share code */}
+          <div className="flex items-center gap-2 px-4 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
+            <span className="text-xs font-semibold" style={{ color: 'var(--ink-2)' }}>Share code</span>
+            <button
+              onClick={copyCode}
+              className="ml-auto flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold tracking-widest transition-all"
+              style={{
+                background: codeCopied ? 'var(--primary)' : 'var(--bg)',
+                color: codeCopied ? 'white' : 'var(--primary)',
+                border: `1.5px solid ${codeCopied ? 'var(--primary)' : 'var(--border)'}`,
+              }}
+              title="Click to copy"
+            >
+              {codeCopied ? 'Copied!' : cal.code}
+              {!codeCopied && (
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+              )}
+            </button>
+          </div>
           {participants.length === 0 ? (
             <p className="p-4 text-sm" style={{ color: 'var(--ink-3)' }}>No one has filled in yet</p>
           ) : (
@@ -1661,6 +1715,26 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
               <button onClick={() => setLegendOpen(false)} className="w-11 h-11 rounded-full flex items-center justify-center text-lg" style={{ background: 'var(--bg)', color: 'var(--ink-2)' }}>×</button>
             </div>
             <div className="overflow-y-auto p-3">
+              {/* Share code — mobile */}
+              <div className="flex items-center gap-2 pb-3 mb-1 border-b" style={{ borderColor: 'var(--border)' }}>
+                <span className="text-xs font-semibold" style={{ color: 'var(--ink-2)' }}>Share code</span>
+                <button
+                  onClick={copyCode}
+                  className="ml-auto flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold tracking-widest transition-all"
+                  style={{
+                    background: codeCopied ? 'var(--primary)' : 'var(--bg)',
+                    color: codeCopied ? 'white' : 'var(--primary)',
+                    border: `1.5px solid ${codeCopied ? 'var(--primary)' : 'var(--border)'}`,
+                  }}
+                >
+                  {codeCopied ? 'Copied!' : cal.code}
+                  {!codeCopied && (
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                    </svg>
+                  )}
+                </button>
+              </div>
               {participants.map(p => (
                 <div key={p.id} className="flex items-center gap-3 py-3 border-b last:border-0" style={{ borderColor: 'var(--border)' }}>
                   <div className="w-5 h-5 rounded-full flex-shrink-0" style={{ background: tierColor(p.color_hue, 3) }} />
@@ -1735,17 +1809,27 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
       {contextMenu && (() => {
         const ctxBlock = blocks.find(b => b.id === contextMenu.blockId)
         const ctxIsOwn = ctxBlock?.participant_id === myParticipantId
-        // Smart positioning: keep menu inside viewport
-        const menuW = 200, menuH = 340
-        const left = Math.min(contextMenu.x, (typeof window !== 'undefined' ? window.innerWidth : 800) - menuW - 8)
-        const top = Math.min(contextMenu.y, (typeof window !== 'undefined' ? window.innerHeight : 600) - menuH - 8)
+        // Auto-flip: estimate menu height, flip vertically/horizontally as needed
+        const menuW = 200
+        const estimatedH = ctxIsOwn ? 340 : 60
+        const vw = typeof window !== 'undefined' ? window.innerWidth : 800
+        const vh = typeof window !== 'undefined' ? window.innerHeight : 600
+        const spaceBelow = vh - contextMenu.y
+        const spaceAbove = contextMenu.y
+        const flipV = spaceBelow < estimatedH && spaceAbove > spaceBelow
+        const flipH = contextMenu.x + menuW + 8 > vw
+        const menuTop = flipV ? Math.max(8, contextMenu.y - estimatedH) : contextMenu.y
+        const menuLeft = flipH ? Math.max(8, contextMenu.x - menuW) : Math.min(contextMenu.x, vw - menuW - 8)
         return (
           <>
-            <div className="fixed inset-0 z-50" onClick={() => setContextMenu(null)} />
+            {/* Transparent overlay — pointer-events:none so scrolling is not blocked on desktop */}
+            <div className="fixed inset-0 z-50" style={{ pointerEvents: 'none' }} />
+            {/* Invisible click-catcher that doesn't block scroll */}
+            <div className="fixed inset-0 z-50" onClick={() => setContextMenu(null)} onContextMenu={e => { e.preventDefault(); setContextMenu(null) }} style={{ background: 'transparent' }} />
             <div
               className="fixed z-50 rounded-2xl py-1.5 min-w-[190px]"
               style={{
-                left: Math.max(8, left), top: Math.max(8, top),
+                left: Math.max(8, menuLeft), top: Math.max(8, menuTop),
                 maxHeight: 'min(80dvh, 360px)', overflowY: 'auto',
                 background: 'var(--bg-card)', boxShadow: '0 8px 32px rgba(0,0,0,0.18)', border: '1px solid var(--border)',
               }}

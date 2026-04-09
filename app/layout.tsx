@@ -29,6 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={cn("h-full", inter.variable, jakarta.variable, "font-sans", geist.variable)}>
       <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <Script id="migrate" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: migrationScript }} />
       </head>
       <body className="min-h-full flex flex-col" style={{ background: 'var(--bg)', color: 'var(--ink)' }}>{children}</body>
