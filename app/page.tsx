@@ -42,7 +42,7 @@ export default function HomePage() {
       {/* Hero */}
       <section className="flex-1 flex flex-col items-center justify-center px-6 py-16 text-center">
         {/* Decorative grid preview */}
-        <div className="relative mb-10 w-full max-w-xs h-20 overflow-hidden rounded-2xl opacity-60 fade-up" aria-hidden>
+        <div className="relative mb-10 w-full max-w-xs h-20 overflow-hidden rounded-2xl opacity-60" aria-hidden>
           <GridPreview />
         </div>
 

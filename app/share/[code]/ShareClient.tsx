@@ -108,7 +108,7 @@ export default function ShareClient({ calendar }: { calendar: Calendar }) {
                   variant="ghost"
                   size="icon"
                   onClick={() => copy(shareUrl, 'url')}
-                  className="flex-shrink-0 w-7 h-7 transition-colors"
+                  className="flex-shrink-0 w-10 h-10 transition-colors"
                   style={{ color: copiedUrl ? 'var(--primary)' : 'var(--ink-3)' }}
                 >
                   {copiedUrl
