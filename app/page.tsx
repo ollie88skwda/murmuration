@@ -42,29 +42,29 @@ export default function HomePage() {
       {/* Hero */}
       <section className="flex-1 flex flex-col items-center justify-center px-6 py-16 text-center">
         {/* Decorative grid preview */}
-        <div className="relative mb-10 w-full max-w-xs h-20 overflow-hidden rounded-2xl opacity-60 fade-up" aria-hidden>
+        <div className="relative mb-10 w-full max-w-xs h-20 overflow-hidden rounded-2xl opacity-60" aria-hidden>
           <GridPreview />
         </div>
 
-        <Badge variant="secondary" className="mb-5 px-3 py-1 text-xs font-semibold tracking-wide uppercase fade-up fade-up-1" style={{ background: 'var(--primary-light)', color: 'var(--primary)', border: 'none' }}>
+        <Badge variant="secondary" className="mb-5 px-3 py-1 text-xs font-semibold tracking-wide uppercase" style={{ background: 'var(--primary-light)', color: 'var(--primary)', border: 'none' }}>
           No account needed · Free
         </Badge>
 
         <h1
-          className="text-5xl sm:text-6xl lg:text-7xl font-bold leading-[1.05] mb-5 tracking-tight fade-up fade-up-2"
+          className="text-5xl sm:text-6xl lg:text-7xl font-bold leading-[1.05] mb-5 tracking-tight"
           style={{ fontFamily: 'var(--font-jakarta)', color: 'var(--ink)' }}
         >
           Find the time.<br />
           <span style={{ color: 'var(--primary)' }}>Skip the chat.</span>
         </h1>
 
-        <p className="text-lg sm:text-xl mb-12 max-w-md fade-up fade-up-3" style={{ color: 'var(--ink-2)' }}>
+        <p className="text-lg sm:text-xl mb-12 max-w-md" style={{ color: 'var(--ink-2)' }}>
           Share a link. Everyone marks when they&apos;re busy.
           You see when everyone&apos;s free. Done.
         </p>
 
         {/* Actions */}
-        <div className="flex flex-col sm:flex-row items-stretch gap-3 w-full max-w-md fade-up fade-up-4">
+        <div className="flex flex-col sm:flex-row items-stretch gap-3 w-full max-w-md">
           <a href="/create" className="sm:flex-1">
             <Button
               className="w-full font-semibold py-6 text-base rounded-2xl gap-2"
@@ -107,7 +107,7 @@ export default function HomePage() {
 
         {/* Recent calendars */}
         {mounted && history.length > 0 && (
-          <div className="w-full max-w-md mt-10 fade-up fade-up-5">
+          <div className="w-full max-w-md mt-10">
             <div className="flex items-center gap-2 mb-3">
               <p className="text-xs font-bold uppercase tracking-widest text-left" style={{ color: 'var(--ink-3)' }}>
                 Recent calendars

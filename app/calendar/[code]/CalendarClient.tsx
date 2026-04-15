@@ -962,7 +962,7 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
                   onMouseEnter={e => { if (effectiveInRange) (e.currentTarget as HTMLElement).style.borderColor = 'var(--primary)' }}
                   onMouseLeave={e => { if (effectiveInRange) (e.currentTarget as HTMLElement).style.borderColor = allBusy ? 'var(--primary)' : isToday ? 'var(--primary)' : 'var(--border)' }}
                   style={{
-                    minHeight: 90,
+                    minHeight: 72,
                     borderRadius: 12,
                     border: `1.5px solid ${!effectiveInRange ? 'transparent' : allBusy || isToday ? 'var(--primary)' : 'var(--border)'}`,
                     background: !effectiveInRange ? 'transparent' : isToday ? 'var(--primary-light)' : 'var(--bg-card)',
@@ -1327,7 +1327,7 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
         <div className="flex items-center justify-end gap-1 sm:gap-1.5 flex-1">
           <button
             onClick={() => setHideBlockedDays(prev => ({ ...prev, [view]: !prev[view] }))}
-            className="flex items-center justify-center w-9 h-9 rounded-lg border transition-all"
+            className="flex items-center justify-center w-11 h-11 rounded-lg border transition-all"
             title={hideBlockedDays[view] ? 'Show all days' : 'Hide fully-blocked days'}
             style={{
               background: hideBlockedDays[view] ? 'var(--primary)' : 'var(--bg-card)',
@@ -1366,10 +1366,10 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
 
       {/* Hint */}
       {showHint && !cal.is_locked && myParticipant && (
-        <div className="flex-shrink-0 flex items-center justify-center gap-3 text-sm font-medium text-white px-4 py-2.5"
+        <div className="flex-shrink-0 flex flex-wrap items-center justify-center gap-2 text-sm font-medium text-white px-4 py-2"
           style={{ background: 'var(--ink)' }}>
-          <span>Drag to mark when you&apos;re <strong>not</strong> free</span>
-          <button onClick={() => setShowHint(false)} className="text-white/50 hover:text-white text-base leading-none min-w-[44px] min-h-[44px] flex items-center justify-center">×</button>
+          <span className="text-center">Drag to mark when you&apos;re <strong>not</strong> free</span>
+          <button onClick={() => setShowHint(false)} className="text-white/50 hover:text-white text-base leading-none min-w-[44px] min-h-[44px] flex items-center justify-center flex-shrink-0">×</button>
         </div>
       )}
 

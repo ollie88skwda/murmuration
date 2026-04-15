@@ -25,9 +25,11 @@ function Gate({ onUnlock }: { onUnlock: () => void }) {
   const [pw, setPw] = useState('')
   const [err, setErr] = useState(false)
 
+  const VALID_PASSWORDS = ['DEBUG', 'dachungsta', '#sidequest26']
+
   function submit(e: React.FormEvent) {
     e.preventDefault()
-    if (pw.trim().toUpperCase() === 'DEBUG') {
+    if (VALID_PASSWORDS.includes(pw.trim())) {
       onUnlock()
     } else {
       setErr(true)
