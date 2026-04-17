@@ -29,7 +29,7 @@ export default function ShareClient({ calendar }: { calendar: Calendar }) {
     const stored = localStorage.getItem(`synkra_${calendar.code}`)
     if (stored) return
     async function registerHost() {
-      const { data: existing } = await supabase.from('participants').select('*').eq('calendar_id', calendar.id).ilike('name', 'Host').single()
+      const { data: existing } = await supabase.from('participants').select('*').eq('calendar_id', calendar.id).ilike('name', 'Host').maybeSingle()
       if (existing) {
         localStorage.setItem(`synkra_${calendar.code}`, JSON.stringify({ participantId: existing.id, calendarId: calendar.id }))
         if (!calendar.host_participant_id) await supabase.from('calendars').update({ host_participant_id: existing.id }).eq('id', calendar.id)
