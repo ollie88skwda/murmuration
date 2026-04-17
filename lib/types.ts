@@ -49,3 +49,18 @@ export const TIER_LABELS: Record<number, string> = {
   2: 'Very busy',
   3: "Can't do it",
 }
+
+export interface Split {
+  id: string
+  calendar_id: string
+  total_cost: number
+  created_at: string
+  updated_at: string
+}
+
+export interface SplitAttendance {
+  id: string
+  split_id: string
+  participant_id: string
+  date: string
+}
