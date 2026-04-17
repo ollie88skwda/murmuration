@@ -1,6 +1,6 @@
 'use client'
 
-import { Calendar } from '@/lib/types'
+import { Calendar, Participant } from '@/lib/types'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
@@ -18,6 +18,8 @@ export default function JoinClient({ calendar }: { calendar: Calendar }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [checkingStorage, setCheckingStorage] = useState(true)
+  const [existingParticipants, setExistingParticipants] = useState<Participant[]>([])
+  const [claimingId, setClaimingId] = useState<string | null>(null)
 
   useEffect(() => {
     const stored = localStorage.getItem(`synkra_${calendar.code}`)
@@ -26,6 +28,26 @@ export default function JoinClient({ calendar }: { calendar: Calendar }) {
       router.replace(`/calendar/${calendar.code}`)
     } else { setCheckingStorage(false) }
   }, [calendar.code, calendar.name, router])
+
+  useEffect(() => {
+    if (checkingStorage) return
+    async function fetchParticipants() {
+      const { data } = await supabase
+        .from('participants')
+        .select('*')
+        .eq('calendar_id', calendar.id)
+        .order('created_at', { ascending: true })
+      if (data) setExistingParticipants(data)
+    }
+    fetchParticipants()
+  }, [checkingStorage, calendar.id])
+
+  async function handleClaim(participant: Participant) {
+    setClaimingId(participant.id)
+    localStorage.setItem(`synkra_${calendar.code}`, JSON.stringify({ participantId: participant.id, calendarId: calendar.id }))
+    saveToHistory(calendar.code, calendar.name)
+    router.push(`/calendar/${calendar.code}`)
+  }
 
   useEffect(() => {
     if (!name.trim()) { setPreviewHue(null); return }
@@ -89,6 +111,42 @@ export default function JoinClient({ calendar }: { calendar: Calendar }) {
                   {calendar.name}
                 </h1>
               </div>
+
+              {/* Existing participants */}
+              {existingParticipants.length > 0 && (
+                <div className="mb-6">
+                  <p className="text-sm font-medium mb-3" style={{ color: 'var(--ink-2)' }}>Are you one of these?</p>
+                  <div className="flex flex-wrap gap-2">
+                    {existingParticipants.map(p => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        disabled={claimingId !== null}
+                        onClick={() => handleClaim(p)}
+                        className="inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-sm font-medium transition-all"
+                        style={{
+                          background: 'var(--bg)',
+                          border: '1px solid var(--border)',
+                          color: 'var(--ink)',
+                          opacity: claimingId !== null && claimingId !== p.id ? 0.45 : 1,
+                          cursor: claimingId !== null ? 'default' : 'pointer',
+                        }}
+                      >
+                        <span
+                          className="w-3 h-3 rounded-full flex-shrink-0"
+                          style={{ background: tierColor(p.color_hue, 3) }}
+                        />
+                        {claimingId === p.id ? 'Joining…' : p.name}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-3 mt-6 mb-1">
+                    <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
+                    <span className="text-xs font-medium" style={{ color: 'var(--ink-3)' }}>or join as someone new</span>
+                    <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
+                  </div>
+                </div>
+              )}
 
               <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                 <div className="space-y-2">
