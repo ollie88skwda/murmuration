@@ -8,6 +8,7 @@ import { saveToHistory } from '@/lib/history'
 import { tierColor, hueForIndex } from '@/lib/colors'
 import { getTimeSlots, getDateRange, formatTime, formatDate, addThirtyMin, timeToSlotIndex, getTimeBands } from '@/lib/grid'
 import ChatPanel from '@/components/ChatPanel'
+import SplitTab from './SplitTab'
 
 const GCAL_TOKEN_KEY = 'synkra_gcal_token'
 
@@ -97,6 +98,7 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
   const [codeCopied, setCodeCopied] = useState(false)
   // Infinite calendar: number of days to show from start_date
   const [infiniteVisibleDays, setInfiniteVisibleDays] = useState(21)
+  const [activeTab, setActiveTab] = useState<'calendar' | 'split'>('calendar')
 
   function copyCode() {
     navigator.clipboard.writeText(cal.code).then(() => {
@@ -1260,6 +1262,29 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
         </div>
       </header>
 
+      {/* Top-level tab bar */}
+      <div
+        className="flex-shrink-0 flex border-b"
+        style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}
+      >
+        {(['calendar', 'split'] as const).map(tab => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className="px-5 py-2.5 text-sm font-semibold capitalize transition-colors"
+            style={{
+              color: activeTab === tab ? 'var(--primary)' : 'var(--ink-3)',
+              borderBottom: activeTab === tab ? '2px solid var(--primary)' : '2px solid transparent',
+              background: 'transparent',
+            }}
+          >
+            {tab === 'calendar' ? 'Calendar' : 'Split'}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'calendar' ? (
+        <>
       {/* Lock banner */}
       {cal.is_locked && (
         <div className="flex-shrink-0 text-xs font-medium text-center py-2 px-4" style={{ background: 'var(--primary-light)', color: 'var(--primary)', borderBottom: '1px solid var(--border)' }}>
@@ -2063,6 +2088,14 @@ export default function CalendarClient({ calendar, initialParticipants, initialB
           </>
         )
       })()}
+        </>
+      ) : (
+        <SplitTab
+          cal={cal}
+          participants={participants}
+          myParticipantId={myParticipantId}
+        />
+      )}
     </div>
   )
 }
