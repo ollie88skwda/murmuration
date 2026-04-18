@@ -13,7 +13,7 @@ export default function ShareClient({ calendar }: { calendar: Calendar }) {
   const router = useRouter()
   const [copiedCode, setCopiedCode] = useState(false)
   const [copiedUrl, setCopiedUrl] = useState(false)
-  const [shareUrl, setShareUrl] = useState(`https://flock-two.vercel.app/join/${calendar.code}`)
+  const [shareUrl, setShareUrl] = useState(`https://synkra-app.vercel.app/join/${calendar.code}`)
 
   useEffect(() => {
     setShareUrl(`${window.location.origin}/join/${calendar.code}`)

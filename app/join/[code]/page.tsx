@@ -17,11 +17,16 @@ export default async function JoinPage({ params }: { params: Promise<{ code: str
   if (!calendar) notFound()
   if (calendar.is_locked) {
     return (
-      <main className="flex-1 flex flex-col items-center justify-center px-4">
-        <div className="w-full max-w-sm bg-white rounded-2xl border border-gray-200 p-8 text-center">
-          <p className="text-2xl mb-3">🔒</p>
-          <h1 className="text-xl font-bold text-[#1a1635] mb-2">Calendar Locked</h1>
-          <p className="text-sm text-[#5b5780]">This calendar is locked. Submissions are closed.</p>
+      <main className="flex-1 flex flex-col items-center justify-center px-4" style={{ background: 'var(--bg)' }}>
+        <div className="w-full max-w-sm rounded-2xl p-8 text-center" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-md)' }}>
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl mb-4" style={{ background: 'var(--primary-light)' }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+          </div>
+          <h1 className="text-xl font-bold mb-2" style={{ fontFamily: 'var(--font-jakarta)', color: 'var(--ink)' }}>Calendar Locked</h1>
+          <p className="text-sm" style={{ color: 'var(--ink-2)' }}>This calendar is locked. Submissions are closed.</p>
         </div>
       </main>
     )
