@@ -186,6 +186,7 @@ export default function HomePage() {
         ].map(f => (
           <div key={f.title} className="flex items-start gap-3">
             <div
+              aria-hidden="true"
               className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center mt-0.5"
               style={{ background: 'var(--primary-light)', color: 'var(--primary)' }}
             >
@@ -214,10 +215,10 @@ function Logo() {
   return (
     <a href="/" className="flex items-center gap-2.5">
       <div
+        aria-hidden="true"
         className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
         style={{ background: 'var(--primary)' }}
       >
-        {/* Two merging waves — syn (together) + kra (blending) */}
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
           <path d="M2 6.5 C4 4.5, 6 8.5, 9 6.5 C12 4.5, 14 8.5, 16 6.5" stroke="white" strokeWidth="2" strokeLinecap="round" fill="none" opacity="0.6"/>
           <path d="M2 11.5 C4 9.5, 6 13.5, 9 11.5 C12 9.5, 14 13.5, 16 11.5" stroke="white" strokeWidth="2" strokeLinecap="round" fill="none"/>

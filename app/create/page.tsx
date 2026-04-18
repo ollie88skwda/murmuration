@@ -186,13 +186,13 @@ export default function CreatePage() {
                       />
                     </div>
                     <span className="font-medium">No end date</span>
-                    <span className="text-xs" style={{ color: 'var(--ink-3)' }}>— keep adding weeks as you go</span>
+                    <span className="text-xs hidden sm:inline" style={{ color: 'var(--ink-3)' }}>keep adding weeks as you go</span>
                   </button>
                 </div>
 
                 {/* Day selection */}
                 <div className="space-y-2.5">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center gap-2 justify-between">
                     <Label style={{ color: 'var(--ink)' }}>
                       Which days{' '}
                       <span className="font-normal text-xs" style={{ color: 'var(--ink-3)' }}>optional</span>

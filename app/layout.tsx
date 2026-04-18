@@ -10,7 +10,7 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 const jakarta = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-jakarta' })
 
 export const metadata: Metadata = {
-  title: 'Synkra — Group Availability Planner',
+  title: 'Synkra: Group Availability Planner',
   description: 'Blend your schedules. Find a time that works for everyone. No accounts, no drama.',
 }
 
